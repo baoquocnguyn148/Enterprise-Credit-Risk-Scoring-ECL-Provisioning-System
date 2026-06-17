@@ -15,7 +15,7 @@
 ## 📊 Dashboard Preview
 
 <p align="center">
-  <img src="streamlit_dashboard.png" width="100%" alt="Credit Risk Analyst Dashboard">
+  <img src="images/streamlit_dashboard.png" width="100%" alt="Credit Risk Analyst Dashboard">
 </p>
 
 > *Dashboard tương tác với Dark Theme, filter động, KPI phản hồi theo filter và 7 biểu đồ phân tích rủi ro chuyên sâu.*
@@ -278,6 +278,16 @@ Dashboard được xây dựng bằng **Streamlit** với Dark Theme chuyên ngh
 
 ---
 
+## 🗄️ Enterprise Data Warehouse (SQL Server)
+
+Hệ thống được tích hợp tự động đẩy dữ liệu kết quả dự đoán và thông tin khách hàng sang SQL Server, sẵn sàng phục vụ cho bộ phận Thu hồi nợ (Collections) truy xuất danh sách rủi ro cao một cách dễ dàng thông qua các View được thiết kế sẵn.
+
+<p align="center">
+  <img src="images/sql_query_result.png" width="100%" alt="SQL Server High Risk Customers Query">
+</p>
+
+---
+
 ## 🛠️ Tech Stack
 
 | Layer | Technology |
@@ -319,28 +329,28 @@ python -m streamlit run app/streamlit_app.py
 
 ```bash
 # Bước 1: Làm sạch và join dữ liệu
-python data_cleaning.py
+python src/data_cleaning.py
 
 # Bước 2: Feature Engineering (164 features)
-python feature_engineering.py
+python src/feature_engineering.py
 
 # Bước 3: WoE/IV Screening (Basel II)
-python woe_iv_scorecard.py
+python src/woe_iv_scorecard.py
 
 # Bước 4: Bayesian Hyperparameter Tuning (~90-120 phút)
-python optuna_tuning.py
+python src/optuna_tuning.py
 
 # Bước 5: Training LightGBM + Calibration + MLflow
-python modeling.py
+python src/modeling.py
 
 # Bước 6: IFRS 9 ECL Calculation
-python ifrs9_ecl_engine.py
+python src/ifrs9_ecl_engine.py
 
 # Bước 7: Business ROI Analysis
-python business_roi_analysis.py
+python src/business_roi_analysis.py
 
 # Bước 8: SHAP & Interpretability
-python shap_analysis.py
+python src/shap_analysis.py
 ```
 
 ### 4. Khởi động Production API
@@ -393,7 +403,7 @@ Enterprise-Credit-Risk-Scoring/
 │   ├── iv_ranking.png            # WoE/IV feature ranking
 │   └── dashboard_screenshot.png  # Dashboard preview
 │
-├── 🐍 Pipeline Scripts
+├── 🐍 src/ (Pipeline Scripts)
 │   ├── data_cleaning.py          # Data cleaning & joining 6 tables
 │   ├── feature_engineering.py    # 164 features + 9 interaction composites
 │   ├── woe_iv_scorecard.py       # Basel II WoE/IV feature screening
