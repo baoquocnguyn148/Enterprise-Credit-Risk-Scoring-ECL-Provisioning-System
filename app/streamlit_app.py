@@ -205,6 +205,7 @@ C_TXT = "#8faecf"
 C_BLUE_BAR = "#4a8cbd"
 C_YELLOW = "#d4a84c"
 C_GREEN = "#32a852"
+C_RED = "#e74c3c"
 
 layout_defaults = dict(
     paper_bgcolor=C_BG_PLOT, plot_bgcolor=C_BG_PLOT,
