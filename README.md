@@ -15,7 +15,7 @@
 ## 📊 Dashboard Preview
 
 <p align="center">
-  <img src="reports/dashboard_screenshot.png" width="100%" alt="Credit Risk Analyst Dashboard">
+  <img src="streamlit_dashboard.png" width="100%" alt="Credit Risk Analyst Dashboard">
 </p>
 
 > *Dashboard tương tác với Dark Theme, filter động, KPI phản hồi theo filter và 7 biểu đồ phân tích rủi ro chuyên sâu.*
