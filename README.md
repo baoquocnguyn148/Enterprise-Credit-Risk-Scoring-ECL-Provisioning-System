@@ -278,30 +278,49 @@ Dashboard được xây dựng bằng **Streamlit** với Dark Theme chuyên ngh
 
 ---
 
-## 🗄️ Enterprise Data Warehouse (SQL Server) & Business Use Cases
+## 🗄️ Enterprise Data Warehouse (SQL Server) & Strategic Business Use Cases
 
-Hệ thống được thiết kế để phục vụ trực tiếp cho các phòng ban nghiệp vụ thông qua Data Warehouse (SQL Server). Toàn bộ 307,511 hồ sơ đã được Score và tự động đồng bộ sang Database.
+Hệ thống không chỉ dừng ở việc huấn luyện Model ML, mà còn tự động hóa luồng dữ liệu (Data Pipeline) đẩy kết quả Scoring của 307,511 hồ sơ sang Data Warehouse (SQL Server). Từ đây, các phòng ban nghiệp vụ có thể trực tiếp khai thác dữ liệu để đưa ra các **quyết định chiến lược (Actionable Insights)**.
 
-### 1. Bộ phận Thu hồi nợ (Collections)
-Lấy danh sách khách hàng chuẩn bị bùng nợ (High Risk) kèm theo thông tin liên hệ (Mock Data) để hối thúc thu hồi sớm.
+### 1. Bộ phận Thu hồi nợ (Collections Department)
+**Tình huống:** Đợi khách hàng trễ hạn mới gọi điện đòi nợ là phương pháp bị động và tỷ lệ thành công thấp.
+**Chiến lược đề xuất (Early Warning System):** 
+- Sử dụng SQL Query lọc ra Top những khách hàng có `Xác suất vỡ nợ > 48%` và sắp đến kỳ thanh toán.
+- **Hành động:** Phân bổ danh sách này cho đội Telesale/SMS tự động nhắn tin nhắc nhở nhẹ nhàng **trước 3-5 ngày**. Tập trung các nhân sự thu hồi nợ "cứng" (nhiều kinh nghiệm) để theo sát nhóm khách hàng thuộc IFRS9 Stage 2 và Stage 3 nhằm giảm thiểu tỷ lệ nợ xấu (NPL - Non-Performing Loan).
 <p align="center">
   <img src="images/sql_query_collections.png" width="100%" alt="Collections Query">
 </p>
 
-### 2. Bộ phận Phê duyệt Tín dụng (Underwriting)
-Tự động dán nhãn `AUTO-APPROVE` cho nhóm khách hàng cực kỳ an toàn (Xác suất vỡ nợ < 15%).
+### 2. Bộ phận Phê duyệt Tín dụng (Underwriting / Credit Approval)
+**Tình huống:** Phê duyệt thủ công hàng ngàn hồ sơ mỗi ngày gây quá tải, nghẽn cổ chai (Bottleneck) và cảm tính.
+**Chiến lược đề xuất (Auto-Decisioning & XAI):**
+- Áp dụng phân luồng tự động (Decision Engine) dựa trên điểm Risk Tier và Probability.
+- **Hành động:** 
+  - **AUTO-APPROVE:** Cấp tín dụng ngay lập tức (giải ngân trong 5 phút) cho nhóm `Very Low Risk` (Xác suất < 15%) để tăng trải nghiệm khách hàng, cạnh tranh với các Fintech khác.
+  - **MANUAL REVIEW:** Đẩy nhóm `Medium Risk` sang cho chuyên viên con người xem xét kỹ hơn giấy tờ (chứng minh thu nhập, tài sản).
+  - **AUTO-REJECT:** Từ chối thẳng nhóm `High Risk` (Xác suất > 48%). Đặc biệt, kết hợp dùng biểu đồ giải thích mô hình **SHAP Waterfall** để giải thích lý do từ chối một cách minh bạch cho khách hàng (ví dụ: do tỷ lệ nợ DTI quá cao), giúp tránh rủi ro pháp lý và khiếu nại.
 <p align="center">
   <img src="images/sql_query_underwriting.png" width="100%" alt="Underwriting Query">
 </p>
 
-### 3. Quản trị Rủi ro & Tài chính (Risk Management)
-Tính toán tổng Dư nợ chịu rủi ro (EAD) và Tiền trích lập dự phòng (ECL) theo từng Nhóm nợ chuẩn IFRS 9.
+### 3. Bộ phận Quản trị Rủi ro & Tài chính (Risk Management & Finance)
+**Tình huống:** Trích lập dự phòng rủi ro theo kiểu cào bằng (quy định cũ) gây giam vốn vô ích của Ngân hàng hoặc trích lập thiếu khi có khủng hoảng.
+**Chiến lược đề xuất (Dynamic IFRS 9 Provisioning):**
+- Theo dõi Dư nợ chịu rủi ro (EAD) và Tiền dự phòng (ECL) trượt theo thời gian thực phân bổ theo 3 Nhóm nợ (Stage 1, 2, 3).
+- **Hành động:** 
+  - Báo cáo định kỳ lên Ban Giám đốc và Ngân hàng Nhà nước con số trích lập chính xác tới từng đồng dựa trên rủi ro thực tế của danh mục.
+  - Thực hiện **Stress Testing**: Chạy mô phỏng kịch bản vĩ mô suy thoái (Severe Scenario) để tính toán trước xem Ngân hàng có cần chuẩn bị thêm vốn đệm (Capital Buffer) hay không.
 <p align="center">
   <img src="images/sql_query_ifrs9.png" width="600" alt="IFRS9 Query">
 </p>
 
-### 4. Kinh doanh & Tiếp thị (Sale & Marketing)
-Lọc tệp khách hàng VIP (Thu nhập cao, Rủi ro siêu thấp) để chạy chiến dịch Telesale mời mở Thẻ tín dụng.
+### 4. Bộ phận Kinh doanh & Tiếp thị (Sale & Marketing)
+**Tình huống:** Chạy quảng cáo đại trà tốn kém chi phí CPA nhưng lại thu hút toàn tệp khách hàng "bùng nợ" vào đăng ký.
+**Chiến lược đề xuất (Risk-Based Marketing):**
+- Đảo ngược bài toán rủi ro thành bài toán tìm kiếm cơ hội kinh doanh.
+- **Hành động:** 
+  - Lọc tệp "Khách hàng VIP" (Thu nhập cao > 200,000, Rủi ro siêu thấp < 5%) để chạy chiến dịch **Cross-sell / Upsell** (mời mở Thẻ tín dụng hạn mức cao, vay thêm vốn đầu tư). Nhóm này rủi ro thấp nên biên lợi nhuận (Profit Margin) mang lại sẽ cực kỳ lớn.
+  - Loại bỏ (Blacklist) ngay nhóm High Risk ra khỏi tệp Custom Audience trên Facebook/Google Ads để không lãng phí ngân sách Marketing vô ích.
 <p align="center">
   <img src="images/sql_query_marketing.png" width="100%" alt="Marketing Query">
 </p>
