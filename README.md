@@ -136,8 +136,9 @@ ECL = PD × LGD × EAD
 | Severe | 10% | 1.60× |
 
 **Portfolio Result:**
-- Total EAD: **$184.21B**
-- Total ECL: **$68,657M** (Coverage: **37.3%**)
+- Total EAD: **$184.01B** (Stage 1: $49.23B · Stage 2: $109.29B · Stage 3: $25.68B)
+- Total ECL: **$68.65B** (Stage 1: $4.49B · Stage 2: $47.47B · Stage 3: $16.69B)
+- Coverage Ratio: **37.3%** (ECL / EAD)
 - Portfolio Default Rate: **8.1%**
 
 <p align="center">

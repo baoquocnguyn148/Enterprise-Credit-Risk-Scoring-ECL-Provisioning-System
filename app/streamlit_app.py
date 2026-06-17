@@ -241,7 +241,9 @@ div[data-testid="stTabs"] button[aria-selected="true"] div[data-testid="stMarkdo
 # ═══════════════════════════════════════════════════════════════════
 # DATA LOADING
 # ═══════════════════════════════════════════════════════════════════
-DATA_DIR = r'd:\Risk\data'
+from pathlib import Path
+ROOT_DIR = Path(__file__).resolve().parent.parent
+DATA_DIR = str(ROOT_DIR / 'data')
 
 @st.cache_data
 def load():
@@ -283,11 +285,22 @@ def load():
             [1, 2], default=3
         )
 
-    # Generate mock Disbursement Month (uniform random across 2022-2023)
+    # Derive a deterministic DISBURSEMENT_MONTH proxy from DAYS_ID_PUBLISH
+    # DAYS_ID_PUBLISH = days since ID was last published (negative), used as
+    # a stable cohort proxy. This avoids random mock data that creates
+    # misleading vintage analysis.
     if 'DISBURSEMENT_MONTH' not in df.columns:
-        np.random.seed(42) # Fixed seed for stable visualization
-        dates = pd.Timestamp('2022-01-01') + pd.to_timedelta(np.random.randint(0, 730, size=len(df)), unit='D')
-        df['DISBURSEMENT_MONTH'] = dates.to_period('M').astype(str)
+        if 'DAYS_ID_PUBLISH' in df.columns:
+            # Convert to approximate months-ago bucket (0-36 months)
+            ref_date = pd.Timestamp('2016-06-01')  # approximate dataset reference date
+            days_offset = df['DAYS_ID_PUBLISH'].fillna(-365).abs().clip(0, 1095)
+            df['DISBURSEMENT_MONTH'] = (
+                (ref_date - pd.to_timedelta(days_offset, unit='D'))
+                .dt.to_period('M').astype(str)
+            )
+        else:
+            # Fallback: fixed single period (no fake trend)
+            df['DISBURSEMENT_MONTH'] = '2015-06'
 
     # PD band
     df['PD_BAND'] = pd.cut(df['PRED_PROB'],

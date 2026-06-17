@@ -28,8 +28,10 @@ import matplotlib.pyplot as plt
 import json, os, time, warnings
 warnings.filterwarnings('ignore')
 
-DATA_DIR    = r'd:\Risk\data'
-REPORTS_DIR = r'd:\Risk\reports'
+from pathlib import Path
+ROOT_DIR = Path(__file__).resolve().parent.parent
+DATA_DIR    = str(ROOT_DIR / 'data')
+REPORTS_DIR = str(ROOT_DIR / 'reports')
 os.makedirs(REPORTS_DIR, exist_ok=True)
 
 def header(t): print(f"\n{'='*65}\n {t}\n{'='*65}")

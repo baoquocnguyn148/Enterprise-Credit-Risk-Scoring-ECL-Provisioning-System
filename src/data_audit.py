@@ -11,7 +11,9 @@ import os
 import warnings
 warnings.filterwarnings('ignore')
 
-DATA_DIR = r'd:\Risk\data'
+from pathlib import Path
+ROOT_DIR = Path(__file__).resolve().parent.parent
+DATA_DIR = str(ROOT_DIR / 'data')
 
 # ─────────────────────────────────────────────────────────────────────────────
 # HELPERS

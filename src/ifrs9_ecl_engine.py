@@ -24,9 +24,11 @@ import matplotlib.pyplot as plt
 import json, os, time, warnings
 warnings.filterwarnings('ignore')
 
-DATA_DIR    = r'd:\Risk\data'
-MODELS_DIR  = r'd:\Risk\models'
-REPORTS_DIR = r'd:\Risk\reports'
+from pathlib import Path
+ROOT_DIR    = Path(__file__).resolve().parent.parent
+DATA_DIR    = str(ROOT_DIR / 'data')
+MODELS_DIR  = str(ROOT_DIR / 'models')
+REPORTS_DIR = str(ROOT_DIR / 'reports')
 os.makedirs(REPORTS_DIR, exist_ok=True)
 
 def header(t): print(f"\n{'='*65}\n {t}\n{'='*65}")
@@ -58,10 +60,11 @@ def classify_stage(df: pd.DataFrame) -> pd.Series:
     pd_col = df.get('PRED_PROB', df.get('PD', pd.Series(0.1, index=df.index)))
     stage  = pd.Series(1, index=df.index, dtype=np.int8)
 
-    s3 = (
-        (df.get('TARGET', pd.Series(0, index=df.index)) == 1) |
-        (pd_col > STAGE_THRESHOLDS['pd_stage3_floor'])
-    )
+    # Stage 3 — Credit-impaired (IFRS 9.5.5.3):
+    # NOTE: We deliberately do NOT use TARGET==1 here.
+    # In production, future default status is unknown at decision time.
+    # Stage 3 is identified purely via model PD and observable behavioral signals.
+    s3 = (pd_col > STAGE_THRESHOLDS['pd_stage3_floor'])
     stage[s3] = 3
 
     s2 = (
@@ -335,8 +338,8 @@ def _plot_macro_scenarios(macro_df, ead, lgd, stage):
 # ─────────────────────────────────────────────────────────────────────────────
 if __name__ == '__main__':
     import sys
-    sys.path.insert(0, r'd:\Risk')
-    from lgd_ead_model import estimate_lgd, estimate_ead, lgd_sensitivity_analysis
+    sys.path.insert(0, str(ROOT_DIR))
+    from src.lgd_ead_model import estimate_lgd, estimate_ead, lgd_sensitivity_analysis
 
     t0  = time.time()
     df  = pd.read_parquet(f'{DATA_DIR}/results_df.parquet')

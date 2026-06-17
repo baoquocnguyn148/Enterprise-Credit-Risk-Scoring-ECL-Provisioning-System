@@ -23,7 +23,7 @@ matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import os
 
-REPORTS_DIR = r'd:\Risk\reports'
+REPORTS_DIR = str(ROOT_DIR / 'reports')
 os.makedirs(REPORTS_DIR, exist_ok=True)
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -182,7 +182,9 @@ def lgd_sensitivity_analysis(df: pd.DataFrame, lgd_series: pd.Series,
 
 
 if __name__ == '__main__':
-    DATA_DIR = r'd:\Risk\data'
+from pathlib import Path
+ROOT_DIR = Path(__file__).resolve().parent.parent
+    DATA_DIR = str(ROOT_DIR / 'data')
     df       = pd.read_parquet(f'{DATA_DIR}/results_df.parquet')
 
     lgd = estimate_lgd(df)

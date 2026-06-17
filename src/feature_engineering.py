@@ -25,8 +25,10 @@ warnings.filterwarnings('ignore')
 from sklearn.preprocessing import LabelEncoder
 from sklearn.impute import SimpleImputer
 
-CLEAN_DIR  = r'd:\Risk\data\cleaned'
-OUTPUT_DIR = r'd:\Risk\data'
+from pathlib import Path
+ROOT_DIR = Path(__file__).resolve().parent.parent
+CLEAN_DIR  = str(ROOT_DIR / 'data' / 'cleaned')
+OUTPUT_DIR = str(ROOT_DIR / 'data')
 
 def header(t): print(f"\n{'='*65}\n  {t}\n{'='*65}")
 def step(t):   print(f"\n  >> {t}")

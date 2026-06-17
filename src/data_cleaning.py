@@ -13,8 +13,10 @@ import numpy as np
 import os, time, warnings
 warnings.filterwarnings('ignore')
 
-DATA_DIR   = r'd:\Risk\data'
-OUTPUT_DIR = r'd:\Risk\data\cleaned'
+from pathlib import Path
+ROOT_DIR   = Path(__file__).resolve().parent.parent
+DATA_DIR   = str(ROOT_DIR / 'data')
+OUTPUT_DIR = str(ROOT_DIR / 'data' / 'cleaned')
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 # ── Logging helper ────────────────────────────────────────────────────────────
@@ -472,8 +474,8 @@ for f in os.listdir(OUTPUT_DIR):
     size = os.path.getsize(path) / 1e6
     print(f"  {f:<45} {size:.1f} MB")
 
-print("""
-All cleaned files saved to: d:/Risk/data/cleaned/
+print(f"""
+All cleaned files saved to: {OUTPUT_DIR}/
 - Format: Parquet (columnar, fast read, type-safe)
 - Ready for: Phase 2 Feature Engineering + SQL Server import
 """)

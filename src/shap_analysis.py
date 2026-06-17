@@ -22,9 +22,11 @@ import matplotlib.pyplot as plt
 import shap
 from sklearn.inspection import PartialDependenceDisplay
 
-DATA_DIR    = r'd:\Risk\data'
-MODELS_DIR  = r'd:\Risk\models'
-REPORTS_DIR = r'd:\Risk\reports'
+from pathlib import Path
+ROOT_DIR = Path(__file__).resolve().parent.parent
+DATA_DIR    = str(ROOT_DIR / 'data')
+MODELS_DIR  = str(ROOT_DIR / 'models')
+REPORTS_DIR = str(ROOT_DIR / 'reports')
 os.makedirs(REPORTS_DIR, exist_ok=True)
 
 def header(t): print(f"\n{'='*65}\n  {t}\n{'='*65}")
