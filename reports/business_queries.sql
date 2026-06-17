@@ -16,7 +16,10 @@ SELECT TOP 1000
     a.AMT_CREDIT AS Tong_Tien_Vay,
     ROUND(p.DEFAULT_PROBABILITY * 100, 2) AS Xac_Suat_Vo_No_Phan_Tram,
     p.RISK_TIER AS Phan_Loai_Rui_Ro,
-    ROUND(p.ECL, 2) AS Du_Kien_Thiet_Hai_USD
+    ROUND(p.ECL, 2) AS Du_Kien_Thiet_Hai_USD,
+    -- Kaggle ẩn thông tin cá nhân (PII). Ta dùng Mock Data để minh họa thực tế:
+    CONCAT('09', RIGHT(CAST(p.SK_ID_CURR * 1234567 AS VARCHAR(20)), 8)) AS So_Dien_Thoai_Lien_He,
+    CONCAT('khachhang_', p.SK_ID_CURR, '@gmail.com') AS Email_Lien_He
 FROM model.Predictions p
 JOIN raw.Application a ON p.SK_ID_CURR = a.SK_ID_CURR
 WHERE p.RISK_TIER = 'High' AND p.DEFAULT_PROBABILITY > 0.48
