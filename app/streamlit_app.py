@@ -1,17 +1,15 @@
 """
 streamlit_app.py — Nova Bank Credit Risk Dashboard
-Pixel-perfect clone of the reference PowerBI/Tableau style.
+Exact replica of the PowerBI reference image design.
 """
 import streamlit as st
 import pandas as pd
 import numpy as np
-import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import os, warnings
 warnings.filterwarnings('ignore')
 
-# ── MUST BE FIRST ────────────────────────────────────────────────
 st.set_page_config(
     page_title="Nova Bank – Credit Risk Analyst",
     page_icon="🏛️",
@@ -19,241 +17,231 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# ═══════════════════════════════════════════════════════════════
-# GLOBAL CSS  — Dark Navy matching the reference image
-# ═══════════════════════════════════════════════════════════════
+# ═══════════════════════════════════════════════════════════════════
+# GLOBAL CSS — exact match of reference image
+# ═══════════════════════════════════════════════════════════════════
 st.markdown("""
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700&family=Inter:wght@300;400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Oswald:wght@400;600;700&family=Open+Sans:wght@400;600&display=swap');
 
-/* ── Reset & Root ── */
+/* ── Reset ── */
 #MainMenu, footer, header { visibility: hidden; }
 .block-container { padding: 0 !important; max-width: 100% !important; }
-html, body, [class*="css"] {
-    font-family: 'Inter', sans-serif;
-    background-color: #070c18 !important;
-    color: #c0d0e8;
-}
 
-/* ── Header Band ── */
+html, body, [class*="css"] {
+    font-family: 'Open Sans', sans-serif;
+    background-color: #080f1e !important;
+    color: #c8d8f0;
+}
+.stApp { background-color: #080f1e !important; }
+
+/* ── Header row ── */
 .hdr {
     display: flex;
-    align-items: center;
-    background: #070c18;
-    border-bottom: 1px solid #1a2e46;
-    padding: 12px 28px;
-    gap: 0;
-    height: 90px;
+    align-items: stretch;
+    background: #060c18;
+    border: 1px solid #1e4272;
+    border-radius: 0;
+    margin: 6px 6px 0 6px;
+    height: 80px;
 }
-.brand {
-    min-width: 220px;
-    border-right: 1px solid #1a2e46;
-    padding-right: 28px;
+.brand-box {
+    background: #060c18;
+    border-right: 2px solid #1e4272;
+    padding: 8px 18px;
     display: flex;
     flex-direction: column;
     justify-content: center;
+    min-width: 200px;
+    max-width: 200px;
 }
-.brand-icon { font-size: 28px; margin-right: 8px; }
+.brand-icon { font-size: 24px; }
 .brand-name {
-    font-family: 'Playfair Display', serif;
-    font-size: 26px;
+    font-family: 'Oswald', sans-serif;
+    font-size: 22px;
     font-weight: 700;
-    color: #a8c4e0;
+    color: #b8d0ec;
     letter-spacing: 1px;
+    line-height: 1.1;
 }
 .brand-sub {
-    font-size: 13px;
-    color: #4a82c0;
+    font-size: 12px;
+    color: #3a80c8;
     font-weight: 600;
-    margin-top: 1px;
     letter-spacing: 0.5px;
 }
 .kpis {
     display: flex;
     flex: 1;
-    justify-content: space-around;
-    align-items: center;
+    align-items: stretch;
 }
-.kpi {
-    text-align: left;
-    padding: 0 24px;
-    border-right: 1px solid #1a2e46;
+.kpi-box {
     flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    padding: 6px 16px;
+    border-right: 1px solid #1a3a62;
+    border-left: 1px solid #1a3a62;
+    position: relative;
 }
-.kpi:last-child { border-right: none; }
+.kpi-box:first-child { border-left: none; }
 .kpi-lbl {
     font-size: 11px;
-    color: #5a7ea8;
+    color: #6898cc;
     text-transform: uppercase;
-    letter-spacing: 1.2px;
-    margin-bottom: 2px;
+    letter-spacing: 0.8px;
     font-weight: 600;
+    margin-bottom: 2px;
 }
 .kpi-num {
-    font-family: 'Playfair Display', serif;
-    font-size: 38px;
+    font-family: 'Oswald', sans-serif;
+    font-size: 36px;
     font-weight: 700;
-    color: #c8daf0;
+    color: #ddeeff;
     line-height: 1;
 }
-.kpi-detail {
+.kpi-sub {
     font-size: 11px;
-    color: #6a90b8;
-    margin-top: 3px;
+    color: #5888b8;
+    margin-top: 2px;
     line-height: 1.5;
 }
 
-/* ── Filter Band ── */
-.filt-band {
-    background: #070c18;
-    padding: 10px 28px;
-    border-bottom: 1px solid #1a2e46;
+/* ── Filter row ── */
+.filt-row {
     display: flex;
-    gap: 12px;
+    align-items: center;
+    background: #060c18;
+    border: 1px solid #1e4272;
+    border-top: 0;
+    margin: 0 6px 4px 6px;
+    padding: 6px 10px;
+    gap: 8px;
 }
 
-/* ── Streamlit widget overrides ── */
+/* ── Streamlit select / multiselect overrides ── */
+.stSelectbox label, .stMultiSelect label { display: none !important; }
 div[data-testid="stSelectbox"] > div > div,
-div[data-testid="stMultiSelect"] > div > div > div {
-    background: #0c1628 !important;
-    border: 1px solid #1a2e46 !important;
-    border-radius: 3px !important;
-    color: #a8c0dc !important;
-    font-size: 13px !important;
+div[data-testid="stMultiSelect"] > div > div {
+    background: #0c1828 !important;
+    border: 1px solid #1e4272 !important;
+    color: #aacce8 !important;
+    font-size: 12px !important;
+    min-height: 32px !important;
+    border-radius: 2px !important;
 }
-.stMultiSelect span[data-baseweb="tag"] {
-    background: #1a3a5c !important;
-    border: 1px solid #2a5080 !important;
-    border-radius: 20px !important;
-    color: #80b4d8 !important;
-    font-size: 11px !important;
+.stMultiSelect [data-baseweb="tag"] {
+    background: #1a3860 !important;
+    border-radius: 2px !important;
+    color: #88bbdd !important;
+    font-size: 10px !important;
 }
+div[data-testid="stVerticalBlock"] { gap: 0 !important; }
+[data-testid="stHorizontalBlock"] { gap: 4px !important; }
 
-/* ── Chart rows padding ── */
-.chart-section {
-    padding: 6px 16px;
-}
-
-/* ── Plotly hover label ── */
-.hoverlayer text { font-family: 'Inter' !important; }
+/* small chart area padding */
+.chart-wrap { padding: 0 6px 4px; }
 </style>
 """, unsafe_allow_html=True)
 
-# ═══════════════════════════════════════════════════════════════
-# DATA LOADING
-# ═══════════════════════════════════════════════════════════════
+# ═══════════════════════════════════════════════════════════════════
+# DATA
+# ═══════════════════════════════════════════════════════════════════
 DATA_DIR = r'd:\Risk\data'
 
 @st.cache_data
-def load_data():
-    for f in ['results_ifrs9.parquet', 'results_df.parquet']:
-        p = os.path.join(DATA_DIR, f)
+def load():
+    for fn in ['results_ifrs9.parquet', 'results_df.parquet']:
+        p = os.path.join(DATA_DIR, fn)
         if os.path.exists(p):
             df = pd.read_parquet(p)
             break
     else:
-        st.error("No data file found. Run modeling.py first.")
-        st.stop()
+        st.error("No data found — run modeling.py first."); st.stop()
 
-    # Credit term months
-    df['CREDIT_TERM_M'] = (df['AMT_CREDIT'] / (df['AMT_ANNUITY'].clip(lower=1)))
-    df['TERM_BIN'] = pd.cut(df['CREDIT_TERM_M'],
-                             bins=[0, 18, 30, 42, 58, 9999],
-                             labels=['12', '24', '36', '48', '60+'])
-
-    # LTI
-    lti = df['CREDIT_INCOME_RATIO'] if 'CREDIT_INCOME_RATIO' in df.columns \
-          else df['AMT_CREDIT'] / (df['AMT_INCOME_TOTAL'].clip(lower=1))
-    df['LTI_BIN'] = pd.cut(lti, bins=[-1, 1, 2, 3, 5, 999],
-                            labels=['0-1x', '1-2x', '2-3x', '3-5x', '>5x'])
-
-    # DTI
-    dti = df['ANNUITY_INCOME_RATIO'] if 'ANNUITY_INCOME_RATIO' in df.columns \
-          else df['AMT_ANNUITY'] / (df['AMT_INCOME_TOTAL'].clip(lower=1))
-    df['DTI_BIN'] = pd.cut(dti, bins=[-1, .10, .20, .30, .50, 9],
-                            labels=['0-10%', '10-20%', '20-30%', '30-50%', '>50%'])
-
-    # Credit amount bins
-    df['CREDIT_BIN'] = pd.cut(df['AMT_CREDIT'],
-                               bins=[0, 100_000, 200_000, 300_000, 500_000, 9e9],
-                               labels=['$0-$100k', '$100k-$200k', '$200k-$300k',
-                                       '$300k-$500k', '$500k+'])
+    df['TERM_M']  = df['AMT_CREDIT'] / df['AMT_ANNUITY'].clip(lower=1)
+    df['TERM_BIN'] = pd.cut(df['TERM_M'], [-1,18,30,42,56,9999],
+                             labels=['12','24','36','48','60+'])
+    lti = df.get('CREDIT_INCOME_RATIO',
+                 df['AMT_CREDIT'] / df['AMT_INCOME_TOTAL'].clip(lower=1))
+    df['LTI_BIN'] = pd.cut(lti, [-1,1,2,3,5,999],
+                            labels=['0–1×','1–2×','2–3×','3–5×','>5×'])
+    dti = df.get('ANNUITY_INCOME_RATIO',
+                 df['AMT_ANNUITY'] / df['AMT_INCOME_TOTAL'].clip(lower=1))
+    df['DTI_BIN'] = pd.cut(dti, [-1,.10,.20,.30,.50,9],
+                            labels=['0–10%','10–20%','20–30%','30–50%','>50%'])
+    df['CRED_BIN'] = pd.cut(df['AMT_CREDIT'],
+                             [0,100e3,200e3,300e3,500e3,9e9],
+                             labels=['$0–100k','$100–200k','$200–300k',
+                                     '$300–500k','$500k+'])
     return df
 
-df = load_data()
+df = load()
 
-# ═══════════════════════════════════════════════════════════════
-# COLOUR PALETTE
-# ═══════════════════════════════════════════════════════════════
-BG      = '#070c18'
-PANEL   = '#0a1220'
-TXT     = '#7a9ec0'
-BLU     = '#4a8cbd'   # bars
-GLD     = '#c79a3c'   # line overlay
-GRN     = '#2e8a58'   # waterfall increase
-TEAL    = '#1e8a8a'
-RED     = '#a83a2e'
-PALETTE = [BLU, GLD, GRN, TEAL, '#6a5090', '#8a6050']
+# ── COLOURS ─────────────────────────────────────────────────────
+BG       = '#080f1e'
+PANEL    = '#060c18'
+BORDER   = '#1e4272'
+TXT      = '#6898cc'
+BAR_BLUE = '#4a7ab8'   # main steel-blue bars (matching image)
+BAR_GRN  = '#1a8a3a'   # waterfall increase
+BAR_RED  = '#c83232'   # waterfall decrease
+LINE_GLD = '#c89a1a'   # gold line overlay
+PIE_COLS = ['#4a7ab8','#c89a1a','#1a8a7a','#8a6040','#6a5090','#3a8a50','#8a3050']
 
-
-def chart_layout(title='', h=280, show_legend=False):
-    """Consistent dark layout for every Plotly figure."""
+def lay(title='', h=280, legend=False):
+    """Shared chart layout — all kwargs are fully specified here, no conflicts."""
     return dict(
-        title=dict(
-            text=title,
-            font=dict(size=13, color='#7a9ec0', family='Inter'),
-            x=0.0, pad=dict(l=4, t=4)
-        ),
+        title=dict(text=title, font=dict(size=12,color='#a0c0e0',family='Open Sans'),
+                   x=0, pad=dict(l=4,t=2)),
         paper_bgcolor='rgba(0,0,0,0)',
-        plot_bgcolor='rgba(0,0,0,0)',
-        font=dict(color=TXT, family='Inter', size=11),
-        margin=dict(l=8, r=12, t=42, b=28),
+        plot_bgcolor ='rgba(0,0,0,0)',
+        font=dict(color=TXT, family='Open Sans', size=10),
+        margin=dict(l=6, r=10, t=40, b=24),
         height=h,
-        showlegend=show_legend,
-        legend=dict(orientation='h', y=1.14, x=.5, xanchor='center',
-                    font=dict(size=10), bgcolor='rgba(0,0,0,0)'),
-        xaxis=dict(showgrid=False, zeroline=False,
-                   tickfont=dict(size=10, color=TXT), linecolor='#1a2e46'),
-        yaxis=dict(showgrid=True, gridcolor='#111c2c', zeroline=False,
-                   tickfont=dict(size=10, color=TXT)),
-        hoverlabel=dict(bgcolor='#0f1e30', font_color='white', font_size=12),
+        showlegend=legend,
+        legend=dict(orientation='h', y=1.12, x=.5, xanchor='center',
+                    font=dict(size=9), bgcolor='rgba(0,0,0,0)',
+                    itemsizing='constant'),
+        xaxis=dict(showgrid=False, zeroline=False, showline=False,
+                   tickfont=dict(size=9,color=TXT)),
+        yaxis=dict(showgrid=True, gridcolor='#0e1e34', zeroline=False,
+                   tickfont=dict(size=9,color=TXT)),
+        hoverlabel=dict(bgcolor='#0c1e38',font_color='#e0f0ff',font_size=11),
     )
 
-
-# ═══════════════════════════════════════════════════════════════
+# ═══════════════════════════════════════════════════════════════════
 # HEADER
-# ═══════════════════════════════════════════════════════════════
-n_m  = (df['CODE_GENDER'] == 'M').sum()
-n_f  = (df['CODE_GENDER'] == 'F').sum()
-tot  = len(df)
-loan = df['AMT_CREDIT'].sum()
+# ═══════════════════════════════════════════════════════════════════
+nm = (df['CODE_GENDER']=='M').sum()
+nf = (df['CODE_GENDER']=='F').sum()
+total_loan = df['AMT_CREDIT'].sum()
 ecl  = df['ECL'].sum() if 'ECL' in df.columns else 0
 dr   = df['TARGET'].mean()
 
 st.markdown(f"""
 <div class="hdr">
-  <div class="brand">
-    <div>
-      <span class="brand-icon">🏛</span>
-      <span class="brand-name">NOVA BANK</span>
-    </div>
-    <div class="brand-sub">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Credit Risk Analyst</div>
+  <div class="brand-box">
+    <div class="brand-icon">🏛</div>
+    <div class="brand-name">NOVA BANK</div>
+    <div class="brand-sub">Credit Risk Analyst</div>
   </div>
   <div class="kpis">
-    <div class="kpi">
+    <div class="kpi-box">
       <div class="kpi-lbl">Total Borrower</div>
-      <div class="kpi-num">{tot/1000:.0f}K</div>
-      <div class="kpi-detail">Male: {n_m/1000:.0f}K<br>Female: {n_f/1000:.0f}K</div>
+      <div class="kpi-num">{len(df)//1000}K</div>
+      <div class="kpi-sub">Male:&nbsp;&nbsp;{nm//1000}K<br>Female:{nf//1000}K</div>
     </div>
-    <div class="kpi">
+    <div class="kpi-box">
       <div class="kpi-lbl">Total Loan Amount</div>
-      <div class="kpi-num">${loan/1e9:.2f}B</div>
+      <div class="kpi-num">${total_loan/1e9:.2f}B</div>
     </div>
-    <div class="kpi">
+    <div class="kpi-box">
       <div class="kpi-lbl">Amount At Risk (ECL)</div>
-      <div class="kpi-num">${ecl/1e6:,.2f}M</div>
+      <div class="kpi-num">${ecl/1e6:,.0f}M</div>
     </div>
-    <div class="kpi">
+    <div class="kpi-box" style="border-right:none">
       <div class="kpi-lbl">Loan Default Rate</div>
       <div class="kpi-num">{dr:.1%}</div>
     </div>
@@ -261,213 +249,248 @@ st.markdown(f"""
 </div>
 """, unsafe_allow_html=True)
 
-# ═══════════════════════════════════════════════════════════════
-# FILTER RIBBON
-# ═══════════════════════════════════════════════════════════════
-fc = st.columns([1, 1, 2, 1], gap="small")
+# ═══════════════════════════════════════════════════════════════════
+# FILTER ROW
+# ═══════════════════════════════════════════════════════════════════
+fc = st.columns([1,1,2,1], gap="small")
 with fc[0]:
-    gender_f = st.selectbox(" ", ["All", "Male", "Female"], label_visibility="collapsed", key="gf")
+    gf = st.selectbox("g", ["All","Male","Female"], label_visibility="collapsed")
 with fc[1]:
-    contract_f = st.selectbox(" ", ["All", "Cash loans", "Revolving loans"], label_visibility="collapsed", key="cf")
+    cf = st.selectbox("c", ["All","Cash loans","Revolving loans"], label_visibility="collapsed")
 with fc[2]:
-    tier_f = st.multiselect(" ", ['Very Low', 'Low', 'Medium', 'High'],
-                             default=['Very Low', 'Low', 'Medium', 'High'],
-                             label_visibility="collapsed", key="tf")
+    tf = st.multiselect("t", ['Very Low','Low','Medium','High'],
+                         default=['Very Low','Low','Medium','High'],
+                         label_visibility="collapsed")
 with fc[3]:
-    edu_opts = ["All"] + sorted(df['NAME_EDUCATION_TYPE'].dropna().unique())
-    edu_f = st.selectbox(" ", edu_opts, label_visibility="collapsed", key="ef")
+    edu_list = ["All"] + sorted(df['NAME_EDUCATION_TYPE'].dropna().unique())
+    ef = st.selectbox("e", edu_list, label_visibility="collapsed")
 
-st.markdown("<div style='height:1px;background:#1a2e46;margin:0 16px'></div>", unsafe_allow_html=True)
+st.markdown("<div style='height:1px;background:#1a3860;margin:0 6px 4px'></div>",
+            unsafe_allow_html=True)
 
 # Apply filters
 fdf = df.copy()
-if gender_f == 'Male':    fdf = fdf[fdf['CODE_GENDER'] == 'M']
-elif gender_f == 'Female': fdf = fdf[fdf['CODE_GENDER'] == 'F']
-if contract_f != 'All':   fdf = fdf[fdf['NAME_CONTRACT_TYPE'] == contract_f]
-if tier_f:                fdf = fdf[fdf['RISK_TIER'].isin(tier_f)]
-if edu_f != 'All':        fdf = fdf[fdf['NAME_EDUCATION_TYPE'] == edu_f]
+if gf == 'Male':   fdf = fdf[fdf['CODE_GENDER']=='M']
+elif gf == 'Female': fdf = fdf[fdf['CODE_GENDER']=='F']
+if cf != 'All':    fdf = fdf[fdf['NAME_CONTRACT_TYPE']==cf]
+if tf:             fdf = fdf[fdf['RISK_TIER'].isin(tf)]
+if ef != 'All':    fdf = fdf[fdf['NAME_EDUCATION_TYPE']==ef]
 
-# ═══════════════════════════════════════════════════════════════
-# ROW 1 — Three charts
-# ═══════════════════════════════════════════════════════════════
-st.markdown("<div style='padding:6px 14px 0'>", unsafe_allow_html=True)
-r1c1, r1c2, r1c3 = st.columns([1.1, 1.3, 1.6], gap="small")
+# ═══════════════════════════════════════════════════════════════════
+# ROW 1 — three charts (same proportions as image)
+# ═══════════════════════════════════════════════════════════════════
+c1, c2, c3 = st.columns([1.1, 1.3, 1.6], gap="small")
 
-# ── 1A: Donut — Employee Type vs Default ──
-with r1c1:
-    grp = (fdf[fdf['TARGET'] == 1]['NAME_INCOME_TYPE']
-           .value_counts()
-           .reset_index())
-    grp.columns = ['Type', 'Count']
+# ── Chart 1: Donut — Employee type vs default ─────────────────
+with c1:
+    grp = (fdf[fdf['TARGET']==1]['NAME_INCOME_TYPE']
+           .value_counts().reset_index())
+    grp.columns = ['Type','Count']
 
     fig1 = go.Figure(go.Pie(
-        labels=grp['Type'],
-        values=grp['Count'],
+        labels=grp['Type'], values=grp['Count'],
         hole=0.42,
+        marker=dict(colors=PIE_COLS, line=dict(color='#08111e', width=2)),
         textinfo='label+percent',
         textposition='outside',
-        marker=dict(colors=PALETTE, line=dict(color=BG, width=2)),
-        textfont=dict(size=10, color='#a8c0dc'),
-        pull=[0.03] * len(grp),
+        textfont=dict(size=9, color='#b0c8e8'),
+        rotation=60,
+        pull=[0.04]*len(grp),
     ))
-    fig1.update_layout(**chart_layout('How Employee Type Affects Default Loans', h=298))
+    lo1 = lay('How Employee Type Affecting Default Loans', h=295)
+    lo1['showlegend'] = False
+    fig1.update_layout(**lo1)
     st.plotly_chart(fig1, use_container_width=True)
 
-# ── 1B: Bar — Default Loans by Loan Term Month ──
-with r1c2:
-    term = (fdf[fdf['TARGET'] == 1]
+# ── Chart 2: Bar (waterfall style) — Defaults by Term Month ──
+with c2:
+    term = (fdf[fdf['TARGET']==1]
             .groupby('TERM_BIN', observed=True)
-            .size()
-            .reset_index(name='Defaults'))
+            .size().reset_index(name='N'))
+    term = term[term['N']>0]
 
-    colors_bar = [GRN if i < len(term) - 1 else BLU for i in range(len(term))]
+    n = len(term)
+    bar_colors = [BAR_GRN]*(n-1) + [BAR_BLUE]
 
     fig2 = go.Figure(go.Bar(
         x=term['TERM_BIN'].astype(str),
-        y=term['Defaults'],
-        marker=dict(color=colors_bar, line=dict(color=BG, width=1.5)),
-        text=[f"{v/1000:.1f}K" for v in term['Defaults']],
+        y=term['N'],
+        marker=dict(color=bar_colors, line=dict(color='#08111e', width=1.5)),
+        text=[f"{v/1000:.1f}K" for v in term['N']],
         textposition='outside',
-        textfont=dict(color='#c0d4ec', size=11),
-        width=0.5,
+        textfont=dict(color='#c0d8f0', size=10),
+        width=0.52,
     ))
-    lo2 = chart_layout('Default Loan by Loan Term Month', h=298)
-    lo2['xaxis']['title'] = dict(text='loan_term_months', font=dict(size=11))
-    lo2['yaxis']['title'] = dict(text='Total Default Loans', font=dict(size=11))
+    lo2 = lay('Default Loan by Loan Term Month', h=295)
+    lo2['yaxis']['title'] = dict(text='Total Default Loans',
+                                  font=dict(size=10, color=TXT))
+    lo2['xaxis']['title'] = dict(text='loan_term_months',
+                                  font=dict(size=10, color=TXT))
+    # Legend-style annotation
+    lo2['showlegend'] = True
+    lo2['legend'] = dict(orientation='h', y=1.10, x=0.5, xanchor='center',
+                          font=dict(size=9), bgcolor='rgba(0,0,0,0)')
     fig2.update_layout(**lo2)
+    # Add dummy traces for legend to match reference image
+    fig2.add_trace(go.Scatter(x=[None], y=[None], mode='markers',
+                               marker=dict(color=BAR_GRN, size=8, symbol='square'),
+                               name='Increase'))
+    fig2.add_trace(go.Scatter(x=[None], y=[None], mode='markers',
+                               marker=dict(color=BAR_RED, size=8, symbol='square'),
+                               name='Decrease'))
+    fig2.add_trace(go.Scatter(x=[None], y=[None], mode='markers',
+                               marker=dict(color=BAR_BLUE, size=8, symbol='square'),
+                               name='Total'))
     st.plotly_chart(fig2, use_container_width=True)
 
-# ── 1C: Combo — Amount at Risk + Default Rate by Credit Bin ──
-with r1c3:
-    bin_g = (fdf.groupby('CREDIT_BIN', observed=True)
-             .agg(Amt=('AMT_CREDIT', 'sum'), DR=('TARGET', 'mean'))
-             .reset_index())
+# ── Chart 3: Combo — Amount at Risk + Default Rate by Credit Bin ──
+with c3:
+    bg = (fdf.groupby('CRED_BIN', observed=True)
+          .agg(Amt=('AMT_CREDIT','sum'), DR=('TARGET','mean'))
+          .reset_index())
 
     fig3 = make_subplots(specs=[[{"secondary_y": True}]])
 
     fig3.add_trace(go.Bar(
-        x=bin_g['CREDIT_BIN'].astype(str),
-        y=bin_g['Amt'],
+        x=bg['CRED_BIN'].astype(str),
+        y=bg['Amt'],
         name='Amount at risk',
-        marker=dict(color=BLU, line=dict(color=BG, width=1)),
-        text=[f"${v/1e6:.0f}M" for v in bin_g['Amt']],
+        marker=dict(color=BAR_BLUE, line=dict(color='#08111e', width=1)),
+        text=[f"${v/1e6:.0f}M" for v in bg['Amt']],
         textposition='inside',
-        textfont=dict(color='white', size=10),
+        textfont=dict(color='white', size=9),
+        width=0.55,
     ), secondary_y=False)
 
     fig3.add_trace(go.Scatter(
-        x=bin_g['CREDIT_BIN'].astype(str),
-        y=bin_g['DR'],
+        x=bg['CRED_BIN'].astype(str),
+        y=bg['DR'],
         name='Loan Default Rate',
         mode='lines+markers+text',
-        line=dict(color=GLD, width=2.5),
-        marker=dict(size=8, color=GLD, line=dict(color=BG, width=1.5)),
-        text=[f"{v:.1%}" for v in bin_g['DR']],
+        line=dict(color=LINE_GLD, width=2.5),
+        marker=dict(color=LINE_GLD, size=7,
+                    line=dict(color='#08111e', width=1.5)),
+        text=[f"{v:.0%}" for v in bg['DR']],
         textposition='top center',
-        textfont=dict(color=GLD, size=10),
+        textfont=dict(color=LINE_GLD, size=9),
     ), secondary_y=True)
 
-    lo3 = chart_layout('Amount at Risk & Default Rate by Loan Amount Bin', h=298, show_legend=True)
+    lo3 = lay('Amount at risk and Loan Default Rate by Loan Am…', h=295, legend=True)
+    lo3['legend'] = dict(orientation='h', y=1.12, x=.5, xanchor='center',
+                          font=dict(size=9), bgcolor='rgba(0,0,0,0)',
+                          marker=dict(size=8))
     fig3.update_layout(**lo3)
-    fig3.update_yaxes(showticklabels=False, showgrid=True, gridcolor='#111c2c',
-                      zeroline=False, secondary_y=False)
-    fig3.update_yaxes(tickformat='.0%', showgrid=False, zeroline=False,
-                      tickfont=dict(color=TXT, size=10), secondary_y=True)
+    fig3.update_yaxes(showgrid=True, gridcolor='#0e1e34',
+                      zeroline=False, showticklabels=False,
+                      secondary_y=False)
+    fig3.update_yaxes(tickformat='.0%', showgrid=False,
+                      zeroline=False, tickfont=dict(size=9, color=TXT),
+                      secondary_y=True)
     st.plotly_chart(fig3, use_container_width=True)
 
-# ═══════════════════════════════════════════════════════════════
-# ROW 2 — Four charts
-# ═══════════════════════════════════════════════════════════════
-st.markdown("<div style='height:4px'></div>", unsafe_allow_html=True)
-r2c1, r2c2, r2c3, r2c4 = st.columns([1, 1, 1, 1.1], gap="small")
+# ═══════════════════════════════════════════════════════════════════
+# ROW 2 — four charts
+# ═══════════════════════════════════════════════════════════════════
+st.markdown("<div style='height:3px'></div>", unsafe_allow_html=True)
+d1, d2, d3, d4 = st.columns([1, 1, 1, 1.1], gap="small")
 
-# ── 2A: H-Bar — Default Rate by LTI ──
-with r2c1:
+# ── Chart 4: H-Bar — Default Rate by LTI ─────────────────────
+with d1:
     lti = (fdf.groupby('LTI_BIN', observed=True)['TARGET']
            .mean().reset_index())
-    lti.columns = ['Bin', 'DR']
+    lti.columns = ['Bin','DR']
 
     fig4 = go.Figure(go.Bar(
         x=lti['DR'],
         y=lti['Bin'].astype(str),
         orientation='h',
-        marker=dict(color=BLU, line=dict(color=BG, width=1.5)),
-        text=[f" {v:.1%}" for v in lti['DR']],
+        marker=dict(color=BAR_BLUE,
+                    line=dict(color='#08111e', width=1.5)),
+        text=[f" {v:.0%}" for v in lti['DR']],
         textposition='outside',
-        textfont=dict(color='#c0d4ec', size=10),
+        textfont=dict(color='#c0d8f0', size=10, family='Open Sans'),
+        width=0.6,
     ))
-    lo4 = chart_layout('Loan Default Rate by LTI', h=265)
+    lo4 = lay('Loan Default Rate by LTI', h=262)
     lo4['xaxis']['showticklabels'] = False
-    lo4['xaxis']['title'] = dict(text='TARGET', font=dict(size=11))
-    lo4['yaxis']['title'] = dict(text='Loan To Income', font=dict(size=11))
+    lo4['xaxis']['title'] = dict(text='Loan Default Rate',
+                                  font=dict(size=10, color=TXT))
+    lo4['yaxis']['title'] = dict(text='Loan To Income',
+                                  font=dict(size=10, color=TXT))
     fig4.update_layout(**lo4)
     st.plotly_chart(fig4, use_container_width=True)
 
-# ── 2B: Full Pie — Default Intensity by Education ──
-with r2c2:
+# ── Chart 5: Full Pie — Default by Education ─────────────────
+with d2:
     edu = (fdf.groupby('NAME_EDUCATION_TYPE')['TARGET']
            .mean().reset_index())
-    edu.columns = ['Edu', 'DR']
-    # Shorten labels for pie
-    edu['Label'] = edu['Edu'].str.replace('Secondary / secondary special', 'Secondary / sec. sp.')
+    edu.columns = ['Label','DR']
+    # Shorter labels
+    edu['Label'] = (edu['Label']
+                    .str.replace('Secondary / secondary special','Secondary\nspecial')
+                    .str.replace('Higher education','Higher edu')
+                    .str.replace('Incomplete higher','Incomplete\nhigher'))
 
     fig5 = go.Figure(go.Pie(
-        labels=edu['Label'],
-        values=edu['DR'],
+        labels=edu['Label'], values=edu['DR'],
         hole=0,
+        marker=dict(colors=PIE_COLS, line=dict(color='#08111e', width=2)),
         textinfo='label+percent',
         textposition='inside',
-        marker=dict(colors=PALETTE, line=dict(color=BG, width=2)),
-        textfont=dict(size=9),
+        textfont=dict(size=8.5, color='white'),
         insidetextorientation='radial',
     ))
-    fig5.update_layout(**chart_layout('Default Intensity by Education', h=265))
+    lo5 = lay('Loan Default Rate by Loan Purpose', h=262)
+    lo5['showlegend'] = False
+    fig5.update_layout(**lo5)
     st.plotly_chart(fig5, use_container_width=True)
 
-# ── 2C: V-Bar — Default Rate by DTI ──
-with r2c3:
+# ── Chart 6: V-Bar — Default Rate by DTI ─────────────────────
+with d3:
     dti = (fdf.groupby('DTI_BIN', observed=True)['TARGET']
            .mean().reset_index())
-    dti.columns = ['Bin', 'DR']
+    dti.columns = ['Bin','DR']
 
     fig6 = go.Figure(go.Bar(
         x=dti['Bin'].astype(str),
         y=dti['DR'],
-        marker=dict(color=BLU, line=dict(color=BG, width=1.5)),
-        text=[f"{v:.1%}" for v in dti['DR']],
+        marker=dict(color=BAR_BLUE, line=dict(color='#08111e', width=1.5)),
+        text=[f"{v:.0%}" for v in dti['DR']],
         textposition='outside',
-        textfont=dict(color='#c0d4ec', size=10),
+        textfont=dict(color='#c0d8f0', size=10),
         width=0.55,
     ))
-    lo6 = chart_layout('Loan Default Rate by DTI', h=265)
-    lo6['xaxis']['title'] = dict(text='Debt To Income', font=dict(size=11))
+    lo6 = lay('Loan Default Rate by DTI', h=262)
+    lo6['xaxis']['title'] = dict(text='Debt To Income',
+                                  font=dict(size=10, color=TXT))
+    lo6['yaxis']['title'] = dict(text='Loan Default Rate',
+                                  font=dict(size=10, color=TXT))
     lo6['yaxis']['showticklabels'] = False
     fig6.update_layout(**lo6)
     st.plotly_chart(fig6, use_container_width=True)
 
-# ── 2D: H-Bar — Amount at Risk by Region Rating ──
-with r2c4:
+# ── Chart 7: H-Bar — Amount at Risk by Region Rating ─────────
+with d4:
     reg = (fdf.groupby('REGION_RATING_CLIENT_W_CITY')
-           .agg(Amt=('AMT_CREDIT', 'sum'))
+           .agg(Amt=('AMT_CREDIT','sum'))
            .reset_index()
            .sort_values('Amt'))
     reg['Label'] = 'Rating ' + reg['REGION_RATING_CLIENT_W_CITY'].astype(str)
-    bar_colors = [GRN, GLD, BLU][:len(reg)]
+    seg_colors = [BAR_GRN, LINE_GLD, BAR_BLUE][:len(reg)]
 
     fig7 = go.Figure(go.Bar(
         x=reg['Amt'],
         y=reg['Label'],
         orientation='h',
-        marker=dict(color=bar_colors, line=dict(color=BG, width=1.5)),
+        marker=dict(color=seg_colors, line=dict(color='#08111e', width=1.5)),
         text=[f"${v/1e6:.0f}M" for v in reg['Amt']],
         textposition='inside',
         textfont=dict(color='white', size=10),
+        width=0.55,
     ))
-    lo7 = chart_layout('Amount at Risk by Region Rating', h=265)
+    lo7 = lay('Amount at risk by state and c…', h=262)
     lo7['xaxis']['showticklabels'] = False
-    lo7['xaxis']['title'] = dict(text='Amt', font=dict(size=11))
-    lo7['yaxis']['title'] = dict(text='Region Rating', font=dict(size=11))
+    lo7['xaxis']['title'] = dict(text='Amt', font=dict(size=10, color=TXT))
+    lo7['yaxis']['title'] = dict(text='', font=dict(size=10, color=TXT))
     fig7.update_layout(**lo7)
     st.plotly_chart(fig7, use_container_width=True)
-
-st.markdown("</div>", unsafe_allow_html=True)
