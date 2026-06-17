@@ -352,10 +352,9 @@ high_risk_ecl_all = df[df['RISK_TIER'] == 'High']['ECL'].sum()
 coverage_all  = ecl_total_all / loan_total_all
 
 # ═══════════════════════════════════════════════════════════════════
-# HEADER ROW PLACEHOLDER — will be rendered after filters
+# HEADER ROW PLACEHOLDER
 # ═══════════════════════════════════════════════════════════════════
-# (header rendered below, after fdf is available)
-
+header_container = st.container()
 
 # ═══════════════════════════════════════════════════════════════════
 # FILTERS
@@ -428,9 +427,9 @@ def delta_badge(val, ref, fmt='.1%', higher_is_bad=True):
     return f'<span style="font-size:10px;color:{color};margin-left:5px">{arrow} {abs(d):{fmt}} vs All</span>'
 
 # ═══════════════════════════════════════════════════════════════════
-# HEADER ROW (rendered here after fdf is ready)
+# HEADER ROW (rendered into placeholder at the top)
 # ═══════════════════════════════════════════════════════════════════
-h0, h1, h2, h3, h4, h5 = st.columns([1.1, 1, 1.1, 1, 0.9, 0.9], gap="small")
+h0, h1, h2, h3, h4, h5 = header_container.columns([1.1, 1, 1.1, 1, 0.9, 0.9], gap="small")
 
 with h0:
     filter_label = f'<div style="font-size:9px;color:#ff9900;margin-top:3px">⚡ FILTERED VIEW</div>' if is_filtered else ''
