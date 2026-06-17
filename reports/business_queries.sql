@@ -18,7 +18,7 @@ SELECT TOP 1000
     p.RISK_TIER AS Phan_Loai_Rui_Ro,
     ROUND(p.ECL, 2) AS Du_Kien_Thiet_Hai_USD,
     -- Kaggle ẩn thông tin cá nhân (PII). Ta dùng Mock Data để minh họa thực tế:
-    CONCAT('09', RIGHT(CAST(p.SK_ID_CURR * 1234567 AS VARCHAR(20)), 8)) AS So_Dien_Thoai_Lien_He,
+    CONCAT('09', RIGHT(CAST(CAST(p.SK_ID_CURR AS BIGINT) * 1234567 AS VARCHAR(20)), 8)) AS So_Dien_Thoai_Lien_He,
     CONCAT('khachhang_', p.SK_ID_CURR, '@gmail.com') AS Email_Lien_He
 FROM model.Predictions p
 JOIN raw.Application a ON p.SK_ID_CURR = a.SK_ID_CURR
