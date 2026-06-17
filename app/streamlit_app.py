@@ -25,53 +25,68 @@ st.markdown("""
 @import url('https://fonts.googleapis.com/css2?family=Oswald:wght@400;600;700&family=Open+Sans:wght@400;600&display=swap');
 
 #MainMenu, footer, header { visibility: hidden; }
-.block-container { padding: 4px 10px !important; max-width: 100% !important; }
+.block-container { padding: 4px 8px !important; max-width: 100% !important; }
 html, body, [class*="css"] {
     font-family: 'Open Sans', sans-serif;
-    background-color: #07101e !important;
+    background-color: #060d1a !important;
     color: #b0c8e4;
 }
-.stApp { background-color: #07101e !important; }
+.stApp { background-color: #060d1a !important; }
+
+/* Give every plotly chart a visible border panel */
+[data-testid="stPlotlyChart"] {
+    border: 1px solid #2060a0 !important;
+    border-radius: 2px !important;
+    padding: 2px !important;
+    background: #080f1e !important;
+}
+/* Column gaps have border-right to separate panels */
+[data-testid="column"] > div:first-child {
+    border-right: 0px solid transparent;
+}
 
 /* KPI cards */
 .kcard {
-    background: #0a1525;
-    border: 1px solid #1a3c66;
-    padding: 10px 16px;
-    border-radius: 2px;
+    background: #070e1c;
+    border: 1px solid #2060a0;
+    border-left: 3px solid #2878c0;
+    padding: 8px 16px;
+    border-radius: 0;
     height: 78px;
     display: flex;
     flex-direction: column;
     justify-content: center;
+    margin-bottom: 0;
 }
 .kcard-lbl {
     font-size: 10px;
-    color: #5a88b8;
+    color: #90b8d8;
     text-transform: uppercase;
-    letter-spacing: 1px;
-    font-weight: 600;
-    margin-bottom: 3px;
+    letter-spacing: 1.2px;
+    font-weight: 700;
+    margin-bottom: 2px;
 }
 .kcard-val {
     font-family: 'Oswald', sans-serif;
-    font-size: 32px;
+    font-size: 38px;
     font-weight: 700;
-    color: #d8eaff;
+    color: #e0f0ff;
     line-height: 1;
 }
 .kcard-sub {
     font-size: 10px;
-    color: #4878a8;
-    margin-top: 3px;
+    color: #6898b8;
+    margin-top: 2px;
     line-height: 1.5;
 }
 
 /* Brand */
 .brand-card {
-    background: #070e1c;
-    border: 1px solid #1a3c66;
-    padding: 10px 16px;
-    border-radius: 2px;
+    background: #060c18;
+    border: 1px solid #2060a0;
+    border-left: 3px solid #2878c0;
+    padding: 8px 16px;
+    border-radius: 0;
     height: 78px;
     display: flex;
     flex-direction: column;
@@ -95,22 +110,23 @@ html, body, [class*="css"] {
 /* Widgets */
 .stSelectbox label, .stMultiSelect label { display: none !important; }
 div[data-testid="stSelectbox"] > div > div {
-    background: #0b1828 !important;
-    border: 1px solid #1a3c66 !important;
+    background: #09152a !important;
+    border: 1px solid #2060a0 !important;
     color: #a8c4e0 !important;
     border-radius: 2px !important;
     min-height: 32px !important;
     font-size: 12px !important;
 }
 .stMultiSelect [data-baseweb="tag"] {
-    background: #193460 !important;
+    background: #1a4070 !important;
     border-radius: 2px !important;
-    color: #80b0d8 !important;
+    color: #80b8e0 !important;
     font-size: 10px !important;
+    border: 1px solid #2a60a0 !important;
 }
 div[data-testid="stMultiSelect"] > div > div {
-    background: #0b1828 !important;
-    border: 1px solid #1a3c66 !important;
+    background: #09152a !important;
+    border: 1px solid #2060a0 !important;
     border-radius: 2px !important;
     font-size: 12px !important;
 }
@@ -247,7 +263,7 @@ with f3:
     edu_opts = ["All"] + sorted(df['NAME_EDUCATION_TYPE'].dropna().unique())
     ef = st.selectbox("_e", edu_opts, label_visibility="collapsed")
 
-st.markdown("<div style='height:3px;background:#1a3860;margin-bottom:4px'></div>",
+st.markdown("<div style='height:2px;background:#2060a0;margin:2px 0 4px 0'></div>",
             unsafe_allow_html=True)
 
 # Apply filters
