@@ -270,7 +270,9 @@ with c_row4[0].container(border=True):
     lti_df = fdf.groupby('LTI_BIN')['TARGET'].mean().reset_index()
     fig4 = px.bar(lti_df, x='TARGET', y='LTI_BIN', orientation='h', title="Loan Default Rate by LTI")
     fig4.update_traces(marker_color=C_BLUE_BAR, text=[f"{v:.1%}" for v in lti_df['TARGET']], textposition='outside')
-    fig4.update_layout(**layout_defaults, height=280, xaxis=dict(showticklabels=False), yaxis_title="Loan To Income")
+    fig4.update_layout(**layout_defaults)
+    fig4.update_layout(height=280, yaxis_title="Loan To Income")
+    fig4.update_xaxes(showticklabels=False)
     st.plotly_chart(fig4, use_container_width=True)
 
 with c_row4[1].container(border=True):
@@ -287,7 +289,9 @@ with c_row4[2].container(border=True):
     dti_df = fdf.groupby('DTI_BIN')['TARGET'].mean().reset_index()
     fig6 = px.bar(dti_df, x='DTI_BIN', y='TARGET', title="Loan Default Rate by DTI")
     fig6.update_traces(marker_color=C_BLUE_BAR, text=[f"{v:.1%}" for v in dti_df['TARGET']], textposition='outside')
-    fig6.update_layout(**layout_defaults, height=280, yaxis=dict(showticklabels=False), xaxis_title="Debt To Income")
+    fig6.update_layout(**layout_defaults)
+    fig6.update_layout(height=280, xaxis_title="Debt To Income")
+    fig6.update_yaxes(showticklabels=False)
     st.plotly_chart(fig6, use_container_width=True)
 
 with c_row4[3].container(border=True):
@@ -296,5 +300,7 @@ with c_row4[3].container(border=True):
     reg_df['Region Rating'] = 'Rating ' + reg_df['REGION_RATING_CLIENT_W_CITY'].astype(str)
     fig7 = px.bar(reg_df, y='Region Rating', x='Amt', orientation='h', title="Amount at Risk by Region Rating", color='Region Rating', color_discrete_sequence=['#32a852', '#d4a84c', '#4a8cbd'])
     fig7.update_traces(text=[f"${v/1e6:.0f}M" for v in reg_df['Amt']], textposition='inside')
-    fig7.update_layout(**layout_defaults, height=280, showlegend=False, xaxis=dict(showticklabels=False))
+    fig7.update_layout(**layout_defaults)
+    fig7.update_layout(height=280, showlegend=False)
+    fig7.update_xaxes(showticklabels=False)
     st.plotly_chart(fig7, use_container_width=True)
