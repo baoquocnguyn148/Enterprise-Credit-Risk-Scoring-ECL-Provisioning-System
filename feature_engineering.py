@@ -370,6 +370,60 @@ log(f"  Total dropped: {n_before_selection - len(feature_cols)}")
 
 
 # ═══════════════════════════════════════════════════════════════
+# STEP 2.11 — Interaction Features (Cross-signal Engineering)
+# ═══════════════════════════════════════════════════════════════
+header("STEP 2.11 — Interaction Features")
+
+# Nhóm 1: Financial stress composite
+# Người trẻ nợ nhiều khác với người già nợ nhiều — LightGBM không tự capture
+df['STRESS_AGE_X_CREDIT']   = df['AGE_YEARS'] * df['CREDIT_INCOME_RATIO']
+df['STRESS_EMP_X_ANNUITY']  = df['YEARS_EMPLOYED'].clip(lower=0) * df['ANNUITY_INCOME_RATIO']
+flag_docs_col = [c for c in df.columns if 'FLAG_DOCUMENT' in c]
+if flag_docs_col:
+    df['FLAG_DOCS_SUM'] = df[flag_docs_col].sum(axis=1)
+df['STRESS_DOCS_X_CREDIT']  = df.get('FLAG_DOCS_SUM', pd.Series(0, index=df.index)) * df['CREDIT_INCOME_RATIO']
+
+# Nhóm 2: Bureau quality composite (normalize về [0,1] rồi kết hợp)
+bureau_overdue_n = df.get('bureau_overdue_mean', pd.Series(0, index=df.index)).clip(0).pipe(
+    lambda s: s / (s.quantile(0.99) + 1e-6)).clip(0, 1)
+prev_refused_n   = df.get('prev_refused_ratio', pd.Series(0, index=df.index)).clip(0, 1)
+inst_late_n      = df.get('inst_late_ratio',    pd.Series(0, index=df.index)).clip(0, 1)
+df['BUREAU_QUALITY_COMPOSITE'] = (
+    (1 - bureau_overdue_n) * 0.40 +
+    (1 - prev_refused_n)   * 0.35 +
+    (1 - inst_late_n)      * 0.25
+)
+
+# Nhóm 3: False Negative detector (overleveraged first-timers — mô hình hay miss)
+# Bureau sạch nhưng LTI > 5 → nguy cơ over-leveraged
+bureau_clean         = (df.get('bureau_bad_debt_flag',
+                         pd.Series(0, index=df.index)) == 0).astype(int)
+high_lti             = (df['CREDIT_INCOME_RATIO'] > 5.0).astype(int)
+df['CLEAN_BUREAU_HIGH_LTI'] = bureau_clean * high_lti
+
+# Nhóm 4: External score composite
+ext_cols = [c for c in ['EXT_SOURCE_1', 'EXT_SOURCE_2', 'EXT_SOURCE_3'] if c in df.columns]
+if len(ext_cols) >= 2:
+    df['EXT_SOURCE_MEAN']    = df[ext_cols].mean(axis=1)
+    df['EXT_SOURCE_MIN']     = df[ext_cols].min(axis=1)
+    df['EXT_SOURCE_PRODUCT'] = df[ext_cols].product(axis=1)
+    df['EXT_SOURCE_STD']     = df[ext_cols].std(axis=1).fillna(0)
+
+# Add new features to feature_cols
+interaction_feats = [
+    'STRESS_AGE_X_CREDIT', 'STRESS_EMP_X_ANNUITY', 'STRESS_DOCS_X_CREDIT',
+    'BUREAU_QUALITY_COMPOSITE', 'CLEAN_BUREAU_HIGH_LTI',
+    'EXT_SOURCE_MEAN', 'EXT_SOURCE_MIN', 'EXT_SOURCE_PRODUCT', 'EXT_SOURCE_STD',
+]
+for f in interaction_feats:
+    if f in df.columns and f not in feature_cols:
+        feature_cols.append(f)
+
+log(f"Interaction features added: {[f for f in interaction_feats if f in df.columns]}")
+log(f"New total feature count: {len(feature_cols)}")
+
+
+# ═══════════════════════════════════════════════════════════════
 # STEP 2.10 — Compute Target Correlation & Save
 # ═══════════════════════════════════════════════════════════════
 header("STEP 2.10 — Target Correlation & Save")
