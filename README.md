@@ -278,12 +278,32 @@ Dashboard được xây dựng bằng **Streamlit** với Dark Theme chuyên ngh
 
 ---
 
-## 🗄️ Enterprise Data Warehouse (SQL Server)
+## 🗄️ Enterprise Data Warehouse (SQL Server) & Business Use Cases
 
-Hệ thống được tích hợp tự động đẩy dữ liệu kết quả dự đoán và thông tin khách hàng sang SQL Server, sẵn sàng phục vụ cho bộ phận Thu hồi nợ (Collections) truy xuất danh sách rủi ro cao một cách dễ dàng thông qua các View được thiết kế sẵn.
+Hệ thống được thiết kế để phục vụ trực tiếp cho các phòng ban nghiệp vụ thông qua Data Warehouse (SQL Server). Toàn bộ 307,511 hồ sơ đã được Score và tự động đồng bộ sang Database.
 
+### 1. Bộ phận Thu hồi nợ (Collections)
+Lấy danh sách khách hàng chuẩn bị bùng nợ (High Risk) kèm theo thông tin liên hệ (Mock Data) để hối thúc thu hồi sớm.
 <p align="center">
-  <img src="images/sql_query_result.png" width="100%" alt="SQL Server High Risk Customers Query">
+  <img src="images/sql_query_collections.png" width="100%" alt="Collections Query">
+</p>
+
+### 2. Bộ phận Phê duyệt Tín dụng (Underwriting)
+Tự động dán nhãn `AUTO-APPROVE` cho nhóm khách hàng cực kỳ an toàn (Xác suất vỡ nợ < 15%).
+<p align="center">
+  <img src="images/sql_query_underwriting.png" width="100%" alt="Underwriting Query">
+</p>
+
+### 3. Quản trị Rủi ro & Tài chính (Risk Management)
+Tính toán tổng Dư nợ chịu rủi ro (EAD) và Tiền trích lập dự phòng (ECL) theo từng Nhóm nợ chuẩn IFRS 9.
+<p align="center">
+  <img src="images/sql_query_ifrs9.png" width="600" alt="IFRS9 Query">
+</p>
+
+### 4. Kinh doanh & Tiếp thị (Sale & Marketing)
+Lọc tệp khách hàng VIP (Thu nhập cao, Rủi ro siêu thấp) để chạy chiến dịch Telesale mời mở Thẻ tín dụng.
+<p align="center">
+  <img src="images/sql_query_marketing.png" width="100%" alt="Marketing Query">
 </p>
 
 ---
