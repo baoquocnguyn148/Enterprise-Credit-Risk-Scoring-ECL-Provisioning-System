@@ -16,7 +16,7 @@ SELECT TOP 1000
     a.AMT_CREDIT AS Tong_Tien_Vay,
     ROUND(p.DEFAULT_PROBABILITY * 100, 2) AS Xac_Suat_Vo_No_Phan_Tram,
     p.RISK_TIER AS Phan_Loai_Rui_Ro,
-    ROUND(p.FINAL_ECL, 2) AS Du_Kien_Thiet_Hai_USD
+    ROUND(p.ECL, 2) AS Du_Kien_Thiet_Hai_USD
 FROM model.Predictions p
 JOIN raw.Application a ON p.SK_ID_CURR = a.SK_ID_CURR
 WHERE p.RISK_TIER = 'High' AND p.DEFAULT_PROBABILITY > 0.48
@@ -46,15 +46,15 @@ GO
 -- Mục đích: Báo cáo tổng số tiền cần trích lập dự phòng theo từng Nhóm Nợ (Chuẩn IFRS 9).
 -- -----------------------------------------------------------------------------------------
 SELECT 
-    p.IFRS9_STAGE AS Nhom_No_IFRS9,
+    p.Stage AS Nhom_No_IFRS9,
     COUNT(p.SK_ID_CURR) AS Tong_So_Khoan_Vay,
     SUM(p.EAD) AS Tong_Du_No_Chi_Chiu_Rui_Ro_EAD,
-    SUM(p.FINAL_ECL) AS Tong_Tien_Trich_Lap_Du_Phong_ECL,
-    ROUND(SUM(p.FINAL_ECL) / SUM(p.EAD) * 100, 2) AS Ty_Le_Bao_Phu_No_Xau_Phan_Tram
+    SUM(p.ECL) AS Tong_Tien_Trich_Lap_Du_Phong_ECL,
+    ROUND(SUM(p.ECL) / SUM(p.EAD) * 100, 2) AS Ty_Le_Bao_Phu_No_Xau_Phan_Tram
 FROM model.Predictions p
-WHERE p.IFRS9_STAGE IS NOT NULL
-GROUP BY p.IFRS9_STAGE
-ORDER BY p.IFRS9_STAGE;
+WHERE p.Stage IS NOT NULL
+GROUP BY p.Stage
+ORDER BY p.Stage;
 GO
 
 -- -----------------------------------------------------------------------------------------
