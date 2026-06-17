@@ -1,12 +1,5 @@
 """
-streamlit_app.py — Enterprise Credit Risk Scoring & ECL Dashboard
-================================================================
-A stunning, production-ready Streamlit dashboard for Risk Analysts.
-Incorporates:
-- IFRS 9 Expected Credit Loss (Stage 1, 2, 3)
-- Business ROI & Optimal Threshold
-- SHAP (Local & Global) and PDP Plots
-- Unleaked Model Metrics (Optuna + Isotonic Calibrated)
+streamlit_app.py — Custom Dashboard matching user's requested Tableau/PowerBI style
 """
 import streamlit as st
 import pandas as pd
@@ -14,380 +7,293 @@ import numpy as np
 import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
-import os, json, re, pickle
-import warnings
+import os, warnings
 warnings.filterwarnings('ignore')
 
 st.set_page_config(
-    page_title="Nova Bank — Enterprise Risk System",
+    page_title="Credit Risk Analyst",
     page_icon="🏦",
     layout="wide",
-    initial_sidebar_state="expanded"
+    initial_sidebar_state="collapsed"
 )
 
-# ── Color Palette & Theming ──────────────────────────────────
-C_GREEN  = "#00E676"  # Stage 1 / Low Risk
-C_BLUE   = "#00B0FF"  # Stage 2 / Medium Risk
-C_ORANGE = "#FF9100"  # Stage 2 / High Risk
-C_RED    = "#FF1744"  # Stage 3 / Impaired
-C_BG     = "#0B132B"
-C_PANEL  = "#1C2541"
-C_TEXT   = "#E0E1DD"
-
-TIER_COLORS = {
-    'Very Low': C_GREEN,
-    'Low':      C_BLUE,
-    'Medium':   C_ORANGE,
-    'High':     C_RED,
-}
-
-# ── Sleek Custom CSS ──────────────────────────────────────────
-st.markdown(f"""
+# ── Global CSS for strict styling matching the image ────────────────
+st.markdown("""
 <style>
-    @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&family=Inter:wght@400;600&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=Inter:wght@400;600&display=swap');
     
-    html, body, [class*="css"] {{
-        font-family: 'Inter', sans-serif;
-    }}
-    h1, h2, h3, h4, h5 {{
-        font-family: 'Outfit', sans-serif;
-        color: {C_TEXT};
-    }}
-    .stApp {{
-        background-color: {C_BG};
-    }}
-    .metric-card {{
-        background: linear-gradient(145deg, {C_PANEL}, #182039);
-        border: 1px solid rgba(255, 255, 255, 0.05);
-        border-radius: 12px;
-        padding: 24px;
+    /* Main Background */
+    .stApp {
+        background-color: #060b14 !important;
+    }
+    
+    /* Hide top header & main padding */
+    header {visibility: hidden;}
+    .block-container {
+        padding-top: 1rem;
+        padding-bottom: 1rem;
+        max-width: 98%;
+    }
+    
+    /* Custom Box styling mimicking the image borders */
+    div[data-testid="stVerticalBlockBorderWrapper"] {
+        border: 1px solid #32587a !important;
+        border-radius: 2px !important;
+        background-color: #0a111e !important;
+    }
+    
+    /* Top Logo & Title area */
+    .logo-area {
+        color: #9bbcdb;
+        font-family: 'Playfair Display', serif;
+        font-size: 32px;
+        font-weight: bold;
+        line-height: 1.1;
         text-align: center;
-        box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
-        transition: transform 0.2s ease, box-shadow 0.2s ease;
-    }}
-    .metric-card:hover {{
-        transform: translateY(-4px);
-        box-shadow: 0 12px 40px 0 rgba(0, 230, 118, 0.1);
-    }}
-    .metric-value {{
-        font-family: 'Outfit', sans-serif;
-        font-size: 2.5rem;
-        font-weight: 800;
-        background: -webkit-linear-gradient(45deg, #00B0FF, #00E676);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-        line-height: 1.2;
-    }}
-    .metric-value.red {{
-        background: -webkit-linear-gradient(45deg, #FF1744, #FF9100);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-    }}
-    .metric-label {{
-        font-size: 0.85rem;
-        color: #8D99AE;
-        text-transform: uppercase;
-        letter-spacing: 1.2px;
-        margin-top: 8px;
+        padding: 5px;
+    }
+    .logo-subtitle {
+        color: #5591d1;
+        font-family: 'Inter', sans-serif;
+        font-size: 20px;
         font-weight: 600;
-    }}
-    .risk-badge {{
-        padding: 8px 24px;
-        border-radius: 30px;
-        font-weight: 800;
-        font-size: 1.1rem;
-        letter-spacing: 1px;
-        text-transform: uppercase;
-        display: inline-block;
-        box-shadow: 0 4px 15px rgba(0,0,0,0.2);
-    }}
-    .stTabs [data-baseweb="tab-list"] {{
-        gap: 24px;
-        background-color: {C_BG};
-    }}
-    .stTabs [data-baseweb="tab"] {{
-        height: 60px;
-        border-radius: 8px 8px 0 0;
-        padding: 0 24px;
-        font-family: 'Outfit', sans-serif;
-        font-weight: 600;
-        font-size: 1.1rem;
-        color: #8D99AE;
-    }}
-    .stTabs [aria-selected="true"] {{
-        background-color: {C_PANEL};
-        color: white;
-        border-bottom: 3px solid {C_GREEN};
-    }}
+    }
+    
+    /* KPI Text styling */
+    .kpi-container {
+        text-align: center;
+        padding: 5px;
+    }
+    .kpi-title {
+        color: #8faecf;
+        font-size: 16px;
+        font-family: 'Playfair Display', serif;
+        margin-bottom: 5px;
+        text-align: left;
+        border-bottom: 1px solid #32587a;
+        padding-bottom: 3px;
+    }
+    .kpi-value {
+        color: #b3d4f5;
+        font-size: 42px;
+        font-family: 'Playfair Display', serif;
+        font-weight: bold;
+    }
+    .kpi-sub {
+        color: #8faecf;
+        font-size: 13px;
+        font-family: 'Inter', sans-serif;
+        text-align: right;
+    }
+    
+    /* Plotly Chart background override */
+    .js-plotly-plot .plotly .bg {
+        fill: transparent !important;
+    }
 </style>
 """, unsafe_allow_html=True)
 
 # ═══════════════════════════════════════════════════════════════
 # DATA LOADING
 # ═══════════════════════════════════════════════════════════════
-DATA_DIR    = r'd:\Risk\data'
-MODELS_DIR  = r'd:\Risk\models'
-REPORTS_DIR = r'd:\Risk\reports'
+DATA_DIR = r'd:\Risk\data'
 
 @st.cache_data
 def load_data():
-    df = pd.read_parquet(os.path.join(DATA_DIR, 'results_df.parquet'))
-    # Try to load IFRS9 results if available
-    ifrs_path = os.path.join(DATA_DIR, 'results_ifrs9.parquet')
-    if os.path.exists(ifrs_path):
-        df_ifrs = pd.read_parquet(ifrs_path)
-        return df_ifrs
+    # If IFRS9 exists, load it to get ECL, else load results_df
+    if os.path.exists(os.path.join(DATA_DIR, 'results_ifrs9.parquet')):
+        df = pd.read_parquet(os.path.join(DATA_DIR, 'results_ifrs9.parquet'))
+    else:
+        df = pd.read_parquet(os.path.join(DATA_DIR, 'results_df.parquet'))
+        
+    # Pre-calculate bins for charts to save time
+    if 'CREDIT_TERM' not in df.columns:
+        df['CREDIT_TERM'] = df['AMT_CREDIT'] / (df['AMT_ANNUITY'] + 1)
+        
+    df['TERM_BIN'] = pd.cut(df['CREDIT_TERM'], bins=[0, 12, 24, 36, 60, 1000], labels=['12', '24', '36', '60', '>60'])
+    df['CREDIT_BIN'] = pd.cut(df['AMT_CREDIT'], bins=[0, 100000, 200000, 300000, 500000, 1e9], 
+                              labels=['$0-$100k', '$100k-$200k', '$200k-$300k', '$300k-$500k', '$500k+'])
+    
+    # LTI / DTI
+    lti = df.get('CREDIT_INCOME_RATIO', df['AMT_CREDIT']/df['AMT_INCOME_TOTAL'])
+    df['LTI_BIN'] = pd.cut(lti, bins=[0, 1, 2, 3, 5, 100], labels=['0-1x', '1-2x', '2-3x', '3-5x', '>5x'])
+    
+    dti = df.get('ANNUITY_INCOME_RATIO', df['AMT_ANNUITY']/df['AMT_INCOME_TOTAL'])
+    df['DTI_BIN'] = pd.cut(dti, bins=[0, 0.1, 0.2, 0.3, 0.5, 1.0], labels=['0-10%', '10-20%', '20-30%', '30-50%', '>50%'])
+    
     return df
-
-@st.cache_data
-def load_metrics():
-    met = {}
-    path = os.path.join(MODELS_DIR, 'model_metrics.json')
-    if os.path.exists(path):
-        with open(path) as f: met = json.load(f)
-    return met
-
-@st.cache_data
-def load_ifrs9_summary():
-    path = os.path.join(REPORTS_DIR, 'ifrs9_stage_summary.csv')
-    if os.path.exists(path):
-        return pd.read_csv(path)
-    return None
 
 try:
     df = load_data()
-    metrics = load_metrics()
-    ifrs9_df = load_ifrs9_summary()
 except Exception as e:
     st.error(f"Failed to load data: {e}")
     st.stop()
 
+
 # ═══════════════════════════════════════════════════════════════
-# SIDEBAR
+# LAYOUT & KPIs
 # ═══════════════════════════════════════════════════════════════
-with st.sidebar:
-    st.image("https://cdn-icons-png.flaticon.com/512/2830/2830284.png", width=60)
-    st.markdown("## 🏦 Nova Bank")
-    st.markdown("### Enterprise Risk Engine")
-    st.markdown("---")
-    
-    st.markdown("#### 🎯 Portfolio Filters")
-    tier_filter = st.multiselect("Risk Tier", ['Very Low', 'Low', 'Medium', 'High'], default=['Very Low', 'Low', 'Medium', 'High'])
-    gender_filter = st.selectbox("Gender", ["All", "M", "F"])
-    
-    st.markdown("---")
-    st.markdown("#### ⚙️ Model Vitals")
-    st.caption(f"**AUC-ROC:** {metrics.get('oof_auc', 0):.4f}")
-    st.caption(f"**KS Stat:** {metrics.get('ks_statistic', 0):.4f}")
-    st.caption(f"**Brier (Cal):** {metrics.get('brier_calibrated', 0):.4f}")
-    st.caption(f"**PSI (Drift):** {metrics.get('psi_score', 0):.4f}")
-    
-    st.markdown("---")
-    st.caption("v2.0 • IFRS 9 Compliant")
+
+# ROW 1: Logo and KPIs
+kpi_cols = st.columns([1.5, 1.2, 1.2, 1.2, 1])
+
+with kpi_cols[0].container(border=True):
+    st.markdown("""
+        <div class="logo-area">
+            🏛️ NOVA BANK<br>
+            <span class="logo-subtitle">Credit Risk Analyst</span>
+        </div>
+    """, unsafe_allow_html=True)
+
+with kpi_cols[1].container(border=True):
+    total_m = len(df[df['CODE_GENDER']=='M'])
+    total_f = len(df[df['CODE_GENDER']=='F'])
+    st.markdown(f"""
+        <div class="kpi-title">Total Borrower</div>
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+            <div class="kpi-value">{len(df)/1000:.0f}K</div>
+            <div class="kpi-sub">Male: {total_m/1000:.0f}K<br>Female: {total_f/1000:.0f}K</div>
+        </div>
+    """, unsafe_allow_html=True)
+
+with kpi_cols[2].container(border=True):
+    total_loan = df['AMT_CREDIT'].sum()
+    st.markdown(f"""
+        <div class="kpi-title">Total Loan Amount</div>
+        <div class="kpi-value" style="text-align:center;">${total_loan/1e9:.2f}B</div>
+    """, unsafe_allow_html=True)
+
+with kpi_cols[3].container(border=True):
+    amt_at_risk = df['ECL'].sum() if 'ECL' in df.columns else df[df['RISK_TIER']=='High']['AMT_CREDIT'].sum()
+    st.markdown(f"""
+        <div class="kpi-title">Amount At Risk (ECL)</div>
+        <div class="kpi-value" style="text-align:center;">${amt_at_risk/1e6:.2f}M</div>
+    """, unsafe_allow_html=True)
+
+with kpi_cols[4].container(border=True):
+    dr = df['TARGET'].mean()
+    st.markdown(f"""
+        <div class="kpi-title">Loan Default Rate</div>
+        <div class="kpi-value" style="text-align:center;">{dr:.1%}</div>
+    """, unsafe_allow_html=True)
+
+
+# ROW 2: Filtering Ribbon (Simplified for aesthetic)
+st.markdown("<div style='height:8px;'></div>", unsafe_allow_html=True)
+filt_cols = st.columns([1, 1, 3, 1.5])
+with filt_cols[0].container(border=True):
+    gender_filter = st.selectbox("Gender", ["All", "Male", "Female"], label_visibility="collapsed")
+with filt_cols[1].container(border=True):
+    contract_filter = st.selectbox("Contract Type", ["All", "Cash loans", "Revolving loans"], label_visibility="collapsed")
+with filt_cols[2].container(border=True):
+    tier_filter = st.multiselect("Risk Tier", ['Very Low', 'Low', 'Medium', 'High'], default=['Very Low', 'Low', 'Medium', 'High'], label_visibility="collapsed")
+with filt_cols[3].container(border=True):
+    edu_filter = st.selectbox("Education", ["All"] + list(df['NAME_EDUCATION_TYPE'].unique()), label_visibility="collapsed")
 
 # Apply filters
 fdf = df.copy()
+if gender_filter == 'Male': fdf = fdf[fdf['CODE_GENDER']=='M']
+elif gender_filter == 'Female': fdf = fdf[fdf['CODE_GENDER']=='F']
+if contract_filter != 'All': fdf = fdf[fdf['NAME_CONTRACT_TYPE']==contract_filter]
 if tier_filter: fdf = fdf[fdf['RISK_TIER'].isin(tier_filter)]
-if gender_filter != "All": fdf = fdf[fdf['CODE_GENDER'] == gender_filter]
+if edu_filter != 'All': fdf = fdf[fdf['NAME_EDUCATION_TYPE']==edu_filter]
+
+
+# ── Chart Theming ─────────────────────────────────────────────
+C_BG_PLOT = "rgba(0,0,0,0)"
+C_TXT = "#8faecf"
+C_BLUE_BAR = "#4a8cbd"
+C_YELLOW = "#d4a84c"
+C_GREEN = "#32a852"
+
+layout_defaults = dict(
+    paper_bgcolor=C_BG_PLOT, plot_bgcolor=C_BG_PLOT,
+    font=dict(color=C_TXT, family="Inter"),
+    margin=dict(l=30, r=30, t=40, b=30),
+    title_font=dict(family="Playfair Display", size=16, color="#9bbcdb"),
+    xaxis=dict(showgrid=False, zeroline=False),
+    yaxis=dict(showgrid=True, gridcolor='#1b2f45', zeroline=False)
+)
 
 # ═══════════════════════════════════════════════════════════════
-# TABS
+# ROW 3: Top Charts
 # ═══════════════════════════════════════════════════════════════
-t_overview, t_ifrs9, t_roi, t_predictor, t_explain = st.tabs([
-    "🌐 Portfolio Overview", 
-    "📈 IFRS 9 Staging", 
-    "💰 Business ROI", 
-    "🎯 Client Predictor", 
-    "🧠 Model XAI"
-])
+st.markdown("<div style='height:8px;'></div>", unsafe_allow_html=True)
+c_row3 = st.columns([1, 1.2, 1.5])
 
-# ─────────────────────────────────────────────────────────────────
-# TAB 1: OVERVIEW
-# ─────────────────────────────────────────────────────────────────
-with t_overview:
-    total_exposure = fdf['AMT_CREDIT'].sum()
-    total_ecl      = fdf['ECL'].sum() if 'ECL' in fdf.columns else 0
-    coverage       = total_ecl / total_exposure if total_exposure > 0 else 0
-    default_rt     = fdf['TARGET'].mean()
+with c_row3[0].container(border=True):
+    # Pie: Employee Type Default Loans
+    inc_df = fdf[fdf['TARGET']==1]['NAME_INCOME_TYPE'].value_counts().reset_index()
+    inc_df.columns = ['Income Type', 'Count']
+    fig1 = px.pie(inc_df, values='Count', names='Income Type', hole=0.4,
+                  title="How Employee Type Affects Default Loans",
+                  color_discrete_sequence=['#4a8cbd', '#d4a84c', '#32a852', '#5e5e5e'])
+    fig1.update_traces(textinfo='label+percent', textposition='outside', marker=dict(line=dict(color='#0a111e', width=2)))
+    fig1.update_layout(**layout_defaults, showlegend=False, height=280)
+    st.plotly_chart(fig1, use_container_width=True)
 
-    c1, c2, c3, c4 = st.columns(4)
-    c1.markdown(f'<div class="metric-card"><div class="metric-value">{len(fdf):,}</div><div class="metric-label">Total Borrowers</div></div>', unsafe_allow_html=True)
-    c2.markdown(f'<div class="metric-card"><div class="metric-value">${total_exposure/1e9:.2f}B</div><div class="metric-label">Total Exposure (EAD)</div></div>', unsafe_allow_html=True)
-    c3.markdown(f'<div class="metric-card"><div class="metric-value red">${total_ecl/1e9:.2f}B</div><div class="metric-label">Expected Credit Loss</div></div>', unsafe_allow_html=True)
-    c4.markdown(f'<div class="metric-card"><div class="metric-value">{coverage:.1%}</div><div class="metric-label">Coverage Ratio</div></div>', unsafe_allow_html=True)
+with c_row3[1].container(border=True):
+    # Waterfall/Bar: Default Loan by Loan Term Month
+    term_df = fdf[fdf['TARGET']==1].groupby('TERM_BIN').size().reset_index(name='Defaults')
+    fig2 = go.Figure(go.Waterfall(
+        x=term_df['TERM_BIN'], y=term_df['Defaults'],
+        measure=["relative"] * len(term_df),
+        decreasing={"marker":{"color": C_RED}},
+        increasing={"marker":{"color": C_GREEN}},
+        totals={"marker":{"color": C_BLUE_BAR}},
+        text=[f"{v/1000:.1f}K" for v in term_df['Defaults']], textposition="outside"
+    ))
+    fig2.update_layout(**layout_defaults, title="Default Loan by Loan Term Month", height=280)
+    st.plotly_chart(fig2, use_container_width=True)
 
-    st.markdown("<br><br>", unsafe_allow_html=True)
-    
-    col_a, col_b = st.columns([1, 1.5])
-    with col_a:
-        # Risk Tier Donut
-        tier_counts = fdf['RISK_TIER'].value_counts().reset_index()
-        fig_tier = px.pie(tier_counts, values='count', names='RISK_TIER', hole=0.6,
-                          color='RISK_TIER', color_discrete_map=TIER_COLORS)
-        fig_tier.update_layout(title="Portfolio by Risk Tier", title_x=0.5, font_color=C_TEXT, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', showlegend=True, legend=dict(orientation="h", y=-0.1))
-        fig_tier.add_annotation(text=f"{default_rt:.1%}<br>Avg Default", x=0.5, y=0.5, font_size=20, showarrow=False, font_color=C_TEXT)
-        st.plotly_chart(fig_tier, use_container_width=True)
+with c_row3[2].container(border=True):
+    # Combo: Amount at risk & Default Rate by Loan Amount
+    bin_df = fdf.groupby('CREDIT_BIN').agg(Amt=('AMT_CREDIT','sum'), DR=('TARGET','mean')).reset_index()
+    fig3 = make_subplots(specs=[[{"secondary_y": True}]])
+    fig3.add_trace(go.Bar(x=bin_df['CREDIT_BIN'], y=bin_df['Amt'], name='Amount at Risk', marker_color=C_BLUE_BAR, text=[f"${v/1e6:.0f}M" for v in bin_df['Amt']], textposition='auto'), secondary_y=False)
+    fig3.add_trace(go.Scatter(x=bin_df['CREDIT_BIN'], y=bin_df['DR'], name='Default Rate', mode='lines+markers', line=dict(color=C_YELLOW, width=3), text=[f"{v:.1%}" for v in bin_df['DR']], textposition='top center'), secondary_y=True)
+    fig3.update_layout(**layout_defaults, title="Amount at Risk & Default Rate by Loan Amount Bin", height=280, legend=dict(orientation="h", y=1.15, x=0))
+    fig3.update_yaxes(showticklabels=False, secondary_y=False)
+    fig3.update_yaxes(tickformat='.0%', secondary_y=True, showgrid=False)
+    st.plotly_chart(fig3, use_container_width=True)
 
-    with col_b:
-        # Amount at Risk vs Default Rate (Combo)
-        fdf['LTI_BIN'] = pd.qcut(fdf.get('CREDIT_INCOME_RATIO', fdf['AMT_CREDIT']/fdf['AMT_INCOME_TOTAL']), 5, labels=['Very Low', 'Low', 'Medium', 'High', 'Extreme'])
-        lti_df = fdf.groupby('LTI_BIN').agg(EAD=('AMT_CREDIT','sum'), DR=('TARGET','mean')).reset_index()
-        
-        fig_combo = make_subplots(specs=[[{"secondary_y": True}]])
-        fig_combo.add_trace(go.Bar(x=lti_df['LTI_BIN'], y=lti_df['EAD'], name='Exposure ($)', marker_color=C_BLUE, opacity=0.7), secondary_y=False)
-        fig_combo.add_trace(go.Scatter(x=lti_df['LTI_BIN'], y=lti_df['DR'], name='Default Rate', mode='lines+markers', line=dict(color=C_RED, width=3), marker=dict(size=10)), secondary_y=True)
-        fig_combo.update_layout(title="Exposure & Default Rate by Loan-to-Income (LTI)", title_x=0.5, font_color=C_TEXT, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', legend=dict(orientation="h", y=1.1))
-        fig_combo.update_yaxes(title_text="Total Exposure ($)", secondary_y=False, tickformat=".2s", showgrid=False)
-        fig_combo.update_yaxes(title_text="Default Rate", secondary_y=True, tickformat=".1%", showgrid=False)
-        st.plotly_chart(fig_combo, use_container_width=True)
 
-# ─────────────────────────────────────────────────────────────────
-# TAB 2: IFRS 9 STAGING
-# ─────────────────────────────────────────────────────────────────
-with t_ifrs9:
-    st.markdown("## 📊 IFRS 9 Expected Credit Loss Provisioning")
-    if ifrs9_df is not None:
-        c1, c2 = st.columns([1, 2])
-        with c1:
-            st.dataframe(ifrs9_df.style.format({
-                'Stage': '{:.0f}', 'Count': '{:,.0f}', 'EAD_Billion': '${:.2f}B',
-                'ECL_Billion': '${:.2f}B', 'PD_12M': '{:.2%}', 'PD_Lifetime': '{:.2%}',
-                'Coverage': '{:.2%}'
-            }), height=200)
-            st.caption("Stage 1: 12M ECL | Stage 2 & 3: Lifetime ECL")
-        with c2:
-            fig_stg = px.bar(ifrs9_df, x='Stage', y=['EAD_Billion', 'ECL_Billion'], barmode='group',
-                             color_discrete_sequence=[C_BLUE, C_RED],
-                             title="EAD vs ECL by IFRS 9 Stage", text_auto='$.2f')
-            fig_stg.update_layout(paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', font_color=C_TEXT)
-            st.plotly_chart(fig_stg, use_container_width=True)
-            
-        st.markdown("### Macroeconomic Scenario Overlay & LGD Sensitivity")
-        s1, s2 = st.columns(2)
-        with s1:
-            if os.path.exists(os.path.join(REPORTS_DIR, 'ifrs9_macro_scenarios.png')):
-                st.image(os.path.join(REPORTS_DIR, 'ifrs9_macro_scenarios.png'), use_column_width=True)
-        with s2:
-            if os.path.exists(os.path.join(REPORTS_DIR, 'lgd_sensitivity.png')):
-                st.image(os.path.join(REPORTS_DIR, 'lgd_sensitivity.png'), use_column_width=True)
-    else:
-        st.info("IFRS 9 Engine has not been executed yet. Run `ifrs9_ecl_engine.py`.")
+# ═══════════════════════════════════════════════════════════════
+# ROW 4: Bottom Charts
+# ═══════════════════════════════════════════════════════════════
+st.markdown("<div style='height:8px;'></div>", unsafe_allow_html=True)
+c_row4 = st.columns([1, 1, 1, 1.2])
 
-# ─────────────────────────────────────────────────────────────────
-# TAB 3: BUSINESS ROI
-# ─────────────────────────────────────────────────────────────────
-with t_roi:
-    st.markdown("## 💰 Business ROI & Cut-off Optimization")
-    roi_path = os.path.join(REPORTS_DIR, 'roi_summary.csv')
-    if os.path.exists(roi_path):
-        roi_df = pd.read_csv(roi_path)
-        best = roi_df.loc[roi_df['net_profit_M'].idxmax()]
-        
-        c1, c2, c3, c4 = st.columns(4)
-        c1.markdown(f'<div class="metric-card"><div class="metric-value">{best["threshold"]:.3f}</div><div class="metric-label">Optimal Threshold</div></div>', unsafe_allow_html=True)
-        c2.markdown(f'<div class="metric-card"><div class="metric-value">${best["net_profit_M"]:.0f}M</div><div class="metric-label">Max Net Profit</div></div>', unsafe_allow_html=True)
-        c3.markdown(f'<div class="metric-card"><div class="metric-value">{best["approval_rate"]:.1%}</div><div class="metric-label">Approval Rate</div></div>', unsafe_allow_html=True)
-        c4.markdown(f'<div class="metric-card"><div class="metric-value red">-${best["loss_fn_M"]:.0f}M</div><div class="metric-label">Residual Loan Loss</div></div>', unsafe_allow_html=True)
-        
-        st.markdown("<br>", unsafe_allow_html=True)
-        if os.path.exists(os.path.join(REPORTS_DIR, 'roi_threshold_analysis.png')):
-            st.image(os.path.join(REPORTS_DIR, 'roi_threshold_analysis.png'), use_column_width=True)
-    else:
-        st.info("Business ROI module has not been executed. Run `business_roi_analysis.py`.")
+with c_row4[0].container(border=True):
+    # H-Bar: Default Rate by LTI
+    lti_df = fdf.groupby('LTI_BIN')['TARGET'].mean().reset_index()
+    fig4 = px.bar(lti_df, x='TARGET', y='LTI_BIN', orientation='h', title="Loan Default Rate by LTI")
+    fig4.update_traces(marker_color=C_BLUE_BAR, text=[f"{v:.1%}" for v in lti_df['TARGET']], textposition='outside')
+    fig4.update_layout(**layout_defaults, height=280, xaxis=dict(showticklabels=False), yaxis_title="Loan To Income")
+    st.plotly_chart(fig4, use_container_width=True)
 
-# ─────────────────────────────────────────────────────────────────
-# TAB 4: CLIENT PREDICTOR
-# ─────────────────────────────────────────────────────────────────
-with t_predictor:
-    st.markdown("## 🎯 Single Client Underwriting")
-    
-    col_search, _ = st.columns([1, 2])
-    with col_search:
-        sample_ids = fdf['SK_ID_CURR'].sample(100, random_state=42).tolist()
-        sel_id = st.selectbox("Search Client ID (Lookup)", sorted(sample_ids))
-        
-    if sel_id:
-        client = fdf[fdf['SK_ID_CURR'] == sel_id].iloc[0]
-        prob = client['PRED_PROB']
-        tier = client['RISK_TIER']
-        color = TIER_COLORS.get(tier, C_GREEN)
-        
-        c_prof, c_score = st.columns([1, 1])
-        with c_prof:
-            st.markdown(f"### Client: `{int(sel_id)}`")
-            st.markdown(f"**Credit Amount:** ${client['AMT_CREDIT']:,.0f}")
-            st.markdown(f"**Income:** ${client['AMT_INCOME_TOTAL']:,.0f}")
-            st.markdown(f"**LTI Ratio:** {client.get('CREDIT_INCOME_RATIO', 0):.2f}x")
-            st.markdown(f"**Age:** {client.get('AGE_YEARS', 0):.0f} years")
-            st.markdown(f"**Bureau Flag:** {'⚠️ Bad Debt' if client.get('bureau_bad_debt_flag',0)==1 else '✅ Clean'}")
-            
-        with c_score:
-            fig_g = go.Figure(go.Indicator(
-                mode="gauge+number", value=prob*100,
-                title={'text': "Probability of Default (PD)", 'font': {'color': C_TEXT}},
-                number={'suffix': "%", 'font': {'color': color, 'size': 50}},
-                gauge={
-                    'axis': {'range': [0, 100], 'tickcolor': C_TEXT},
-                    'bar': {'color': color},
-                    'bgcolor': "rgba(0,0,0,0.2)",
-                    'steps': [
-                        {'range': [0, 20], 'color': f'{C_GREEN}33'},
-                        {'range': [20, 45], 'color': f'{C_BLUE}33'},
-                        {'range': [45, 65], 'color': f'{C_ORANGE}33'},
-                        {'range': [65, 100], 'color': f'{C_RED}33'},
-                    ]
-                }
-            ))
-            fig_g.update_layout(paper_bgcolor='rgba(0,0,0,0)', font_color=C_TEXT, height=300, margin=dict(t=0,b=0))
-            st.plotly_chart(fig_g, use_container_width=True)
-            
-            st.markdown(f"<div style='text-align:center'><div class='risk-badge' style='background:{color}22; border:2px solid {color}; color:{color}'>{tier} RISK</div></div>", unsafe_allow_html=True)
-            
-        st.markdown("---")
-        st.markdown("### 🔍 Risk Explanation (SHAP Waterfall)")
-        if os.path.exists(os.path.join(DATA_DIR, 'shap_values_sample.parquet')):
-            shap_df = pd.read_parquet(os.path.join(DATA_DIR, 'shap_values_sample.parquet'))
-            c_shap = shap_df[shap_df['SK_ID_CURR'] == sel_id]
-            if not c_shap.empty:
-                sv = c_shap.drop(columns=['SK_ID_CURR']).iloc[0].values
-                feats = [c for c in c_shap.columns if c != 'SK_ID_CURR']
-                s_series = pd.Series(sv, index=feats).sort_values(key=abs, ascending=True).tail(10)
-                colors = [C_RED if v > 0 else C_GREEN for v in s_series.values]
-                
-                fig_wf = go.Figure(go.Bar(
-                    x=s_series.values, y=s_series.index, orientation='h',
-                    marker_color=colors, text=[f"{v:+.3f}" for v in s_series.values],
-                    textposition='outside'
-                ))
-                fig_wf.update_layout(
-                    title="Top 10 Factors pushing Risk Score (Red = Increase Risk, Green = Decrease)",
-                    paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', font_color=C_TEXT,
-                    xaxis=dict(showgrid=True, gridcolor='rgba(255,255,255,0.1)'), height=400
-                )
-                st.plotly_chart(fig_wf, use_container_width=True)
-            else:
-                st.info("SHAP values not pre-computed for this exact client. View static waterfalls in 'Model XAI' tab.")
-        else:
-            st.info("SHAP analysis missing. Run `shap_analysis.py`.")
+with c_row4[1].container(border=True):
+    # Pie: Default Rate by Loan Purpose / Education (using Education since Purpose is mostly XAP)
+    edu_df = fdf.groupby('NAME_EDUCATION_TYPE')['TARGET'].mean().reset_index()
+    # Normalize to pie representation of default intensity
+    fig5 = px.pie(edu_df, values='TARGET', names='NAME_EDUCATION_TYPE', hole=0, title="Default Intensity by Education", color_discrete_sequence=['#4a8cbd', '#d4a84c', '#32a852', '#2a3f5f'])
+    fig5.update_traces(textinfo='label+percent', textposition='inside')
+    fig5.update_layout(**layout_defaults, showlegend=False, height=280)
+    st.plotly_chart(fig5, use_container_width=True)
 
-# ─────────────────────────────────────────────────────────────────
-# TAB 5: MODEL XAI (SHAP & PDP)
-# ─────────────────────────────────────────────────────────────────
-with t_explain:
-    st.markdown("## 🧠 eXplainable AI (XAI)")
-    st.markdown("Unpacking the LightGBM black-box using SHAP and Partial Dependence Plots.")
-    
-    s1, s2 = st.columns(2)
-    with s1:
-        st.markdown("#### Global Feature Importance (SHAP)")
-        if os.path.exists(os.path.join(REPORTS_DIR, 'shap_summary_bar.png')):
-            st.image(os.path.join(REPORTS_DIR, 'shap_summary_bar.png'), use_column_width=True)
-    with s2:
-        st.markdown("#### Feature Directionality (Beeswarm)")
-        if os.path.exists(os.path.join(REPORTS_DIR, 'shap_beeswarm.png')):
-            st.image(os.path.join(REPORTS_DIR, 'shap_beeswarm.png'), use_column_width=True)
-            
-    st.markdown("---")
-    st.markdown("#### Partial Dependence Plots (PDP)")
-    if os.path.exists(os.path.join(REPORTS_DIR, 'pdp_top_features.png')):
-        st.image(os.path.join(REPORTS_DIR, 'pdp_top_features.png'), use_column_width=True)
+with c_row4[2].container(border=True):
+    # V-Bar: Default Rate by DTI
+    dti_df = fdf.groupby('DTI_BIN')['TARGET'].mean().reset_index()
+    fig6 = px.bar(dti_df, x='DTI_BIN', y='TARGET', title="Loan Default Rate by DTI")
+    fig6.update_traces(marker_color=C_BLUE_BAR, text=[f"{v:.1%}" for v in dti_df['TARGET']], textposition='outside')
+    fig6.update_layout(**layout_defaults, height=280, yaxis=dict(showticklabels=False), xaxis_title="Debt To Income")
+    st.plotly_chart(fig6, use_container_width=True)
+
+with c_row4[3].container(border=True):
+    # H-Bar: Amount at Risk by Region (replacing Map)
+    reg_df = fdf.groupby('REGION_RATING_CLIENT_W_CITY').agg(Amt=('AMT_CREDIT','sum')).reset_index()
+    reg_df['Region Rating'] = 'Rating ' + reg_df['REGION_RATING_CLIENT_W_CITY'].astype(str)
+    fig7 = px.bar(reg_df, y='Region Rating', x='Amt', orientation='h', title="Amount at Risk by Region Rating", color='Region Rating', color_discrete_sequence=['#32a852', '#d4a84c', '#4a8cbd'])
+    fig7.update_traces(text=[f"${v/1e6:.0f}M" for v in reg_df['Amt']], textposition='inside')
+    fig7.update_layout(**layout_defaults, height=280, showlegend=False, xaxis=dict(showticklabels=False))
+    st.plotly_chart(fig7, use_container_width=True)
