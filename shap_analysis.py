@@ -20,6 +20,7 @@ import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import shap
+from sklearn.inspection import PartialDependenceDisplay
 
 DATA_DIR    = r'd:\Risk\data'
 MODELS_DIR  = r'd:\Risk\models'
@@ -230,11 +231,34 @@ else:
 with open(os.path.join(MODELS_DIR, 'shap_expected_value.pkl'), 'wb') as f:
     pickle.dump(expected_val, f)
 
+# ═══════════════════════════════════════════════════════════════
+# STEP 7 — [NEW] Partial Dependence Plots (PDP)
+# ═══════════════════════════════════════════════════════════════
+header("STEP 7 — [NEW] Partial Dependence Plots (PDP)")
+step("Generating PDP for top 4 features...")
+
+pdp_features = ['EXT_SOURCE_2', 'EXT_SOURCE_3', 'CREDIT_INCOME_RATIO', 'AGE_YEARS']
+pdp_features = [f for f in pdp_features if f in FEATURES]
+
+if pdp_features:
+    fig, ax = plt.subplots(figsize=(12, 8))
+    PartialDependenceDisplay.from_estimator(
+        model, X_sample, pdp_features,
+        ax=ax, grid_resolution=50, 
+        line_kw={"color": "#E74C3C", "linewidth": 2}
+    )
+    plt.suptitle("Partial Dependence Plots (PDP) — Marginal Effect on Default Probability", fontsize=14, y=1.02)
+    plt.tight_layout()
+    plt.savefig(os.path.join(REPORTS_DIR, 'pdp_top_features.png'), dpi=150, bbox_inches='tight')
+    plt.close()
+    log("Saved: pdp_top_features.png")
+
+
 print(f"\nSaved SHAP artifacts successfully:")
 for fname in ['shap_summary_bar.png', 'shap_beeswarm.png',
               'shap_waterfall_highrisk.png', 'shap_waterfall_lowrisk.png',
               'shap_dep_extsource2.png', 'shap_dep_credit_income.png',
-              'shap_dep_bureau_days.png']:
+              'shap_dep_bureau_days.png', 'pdp_top_features.png']:
     path = os.path.join(REPORTS_DIR, fname)
     exists = '✓' if os.path.exists(path) else '✗ MISSING'
     size   = f"{os.path.getsize(path)/1024:.0f} KB" if os.path.exists(path) else ''
