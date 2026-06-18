@@ -494,7 +494,15 @@ with h5:
 # ═══════════════════════════════════════════════════════════════════
 # TABS
 # ═══════════════════════════════════════════════════════════════════
-main_tab, insights_tab = st.tabs(["Credit Risk Analyst", "Insights"])
+import sys
+sys.path.insert(0, str(ROOT_DIR))
+from src.time_series_engine import (
+    build_vintage_data, build_migration_matrix,
+    build_ecl_projection, build_cohort_default, build_intraday_risk,
+    MACRO_COLORS
+)
+
+main_tab, insights_tab, trend_tab = st.tabs(["Credit Risk Analyst", "Insights", "📈 Trend & Time Series"])
 
 
 with main_tab:
@@ -844,3 +852,411 @@ with insights_tab:
         lo['margin'] = dict(l=4, r=10, t=38, b=16)
         fig.update_layout(**lo)
         st.plotly_chart(fig, use_container_width=True)
+
+# ═══════════════════════════════════════════════════════════════════
+# TAB 3 — TREND & TIME SERIES
+# ═══════════════════════════════════════════════════════════════════
+with trend_tab:
+
+    # ── Macro Scenario filter (top of tab) ───────────────────────────────────
+    tf1, tf2, tf3, tf4 = st.columns([2, 2, 2, 2])
+    with tf1:
+        horizon = st.select_slider("Projection Horizon", options=[3, 6, 12, 24], value=12)
+    with tf2:
+        scenarios_sel = st.multiselect(
+            "Macro Scenarios",
+            ['Optimistic', 'Base', 'Adverse', 'Severe'],
+            default=['Base', 'Adverse', 'Severe']
+        )
+    with tf3:
+        stage_focus = st.selectbox("Stage Focus (Migration)", ['All', 'Stage 1', 'Stage 2', 'Stage 3'])
+    with tf4:
+        stress_level = st.select_slider(
+            "Stress PD Scalar (Migration)",
+            options=[1.10, 1.25, 1.50, 1.75],
+            value=1.25,
+            format_func=lambda x: f"×{x:.2f}"
+        )
+
+    st.markdown("---")
+
+    # ── Pre-compute all 5 datasets ───────────────────────────────────────────
+    @st.cache_data(show_spinner=False)
+    def get_ts_data(scalar, hrs):
+        v  = build_vintage_data(df)
+        m, mp = build_migration_matrix(df, macro_scalar=scalar)
+        e  = build_ecl_projection(df, months=hrs)
+        c  = build_cohort_default(df)
+        p, hourly, daily = build_intraday_risk(df)
+        return v, m, mp, e, c, p, hourly, daily
+
+    vintage_df, mig_abs, mig_pct, ecl_proj, cohort_df, \
+        intra_pivot, hourly_df, daily_df = get_ts_data(stress_level, horizon)
+
+    # ── KPI Strip ────────────────────────────────────────────────────────────
+    ecl_base_12 = ecl_proj[ecl_proj['Scenario'] == 'Base']['ECL_B'].iloc[-1] if not ecl_proj.empty else 0
+    ecl_severe_12 = ecl_proj[ecl_proj['Scenario'] == 'Severe']['ECL_B'].iloc[-1] if not ecl_proj.empty else 0
+    ecl_now = ecl_proj['ECL_current_B'].iloc[0] if not ecl_proj.empty else df['ECL'].sum() / 1e9
+
+    s1_to_s2 = mig_pct.loc[1, 2] if (1 in mig_pct.index and 2 in mig_pct.columns) else 0
+    s1_to_s3 = mig_pct.loc[1, 3] if (1 in mig_pct.index and 3 in mig_pct.columns) else 0
+    migration_risk = s1_to_s2 + s1_to_s3
+
+    peak_hour_row = hourly_df.loc[hourly_df['high_risk_pct'].idxmax()] if not hourly_df.empty else None
+    peak_hr = int(peak_hour_row['Hour']) if peak_hour_row is not None else 0
+    peak_pct = peak_hour_row['high_risk_pct'] if peak_hour_row is not None else 0
+
+    k1, k2, k3, k4 = st.columns(4)
+    for col, label, val, suffix, is_bad in [
+        (k1, "ECL Current ($B)", ecl_now, "B", False),
+        (k2, f"ECL Base +{horizon}M ($B)", ecl_base_12, "B", True),
+        (k3, "S1 Downgrade Risk (%)", migration_risk, "%", True),
+        (k4, f"Peak Risk Hour", peak_hr, f":00  ({peak_pct:.1f}%)", True),
+    ]:
+        color_cls = "red" if is_bad else "green"
+        with col:
+            st.markdown(f"""
+            <div class="kcard">
+                <div class="kcard-lbl">{label}</div>
+                <div class="kcard-val {color_cls}">${val:.1f}{suffix}</div>
+            </div>""" if "Hour" not in label else f"""
+            <div class="kcard">
+                <div class="kcard-lbl">{label}</div>
+                <div class="kcard-val {color_cls}">{val:02d}:00 ({peak_pct:.1f}%)</div>
+            </div>""", unsafe_allow_html=True)
+
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    # ════════════════════════════════════════════════════════════════
+    # ROW 1 — V1: Vintage Analysis  |  V2: Stage Migration Heatmap
+    # ════════════════════════════════════════════════════════════════
+    row1_left, row1_right = st.columns(2)
+
+    # ── V1: Portfolio Vintage Analysis ───────────────────────────────────────
+    with row1_left:
+        cohorts = sorted(vintage_df['COHORT'].unique())
+        palette = ['#2ecc71', '#27ae60', '#3498db', '#2980b9',
+                   '#e67e22', '#d35400', '#e74c3c', '#c0392b']
+        mob_order = ['0-12m', '12-18m', '18-24m', '24-36m', '36m+']
+
+        fig = go.Figure()
+        for i, cohort in enumerate(cohorts):
+            sub = vintage_df[vintage_df['COHORT'] == cohort]
+            sub = sub[sub['MOB_BUCKET'].isin(mob_order)]
+            fig.add_trace(go.Scatter(
+                x=sub['MOB_BUCKET'],
+                y=sub['default_rate_pct'],
+                mode='lines+markers',
+                name=cohort,
+                line=dict(color=palette[i % len(palette)], width=2),
+                marker=dict(size=6),
+                hovertemplate=(
+                    f"<b>{cohort}</b><br>"
+                    "MOB: %{x}<br>"
+                    "Default Rate: %{y:.1f}%<extra></extra>"
+                )
+            ))
+
+        # Bank average line
+        avg_dr = vintage_df['default_rate_pct'].mean()
+        fig.add_hline(y=avg_dr, line_dash='dot', line_color='#ffffff',
+                      annotation_text=f"Portfolio Avg {avg_dr:.1f}%",
+                      annotation_font_color='#ffffff')
+
+        lo = L('Portfolio Vintage Analysis — Default Rate by Cohort (MOB)', h=280, legend=True)
+        lo['xaxis'] = dict(title='Months on Book (MOB)', tickfont=dict(size=9, color=TXT),
+                           showgrid=False, zeroline=False, categoryorder='array',
+                           categoryarray=mob_order)
+        lo['yaxis'] = dict(title='Default Rate (%)', tickfont=dict(size=9, color=TXT),
+                           showgrid=True, gridcolor='#0e1e34', zeroline=False)
+        lo['legend'] = dict(font=dict(size=8, color=TXT), bgcolor='rgba(0,0,0,0)',
+                            orientation='v', x=1.01)
+        lo['margin'] = dict(l=4, r=80, t=40, b=30)
+        fig.update_layout(**lo)
+        st.plotly_chart(fig, use_container_width=True)
+
+    # ── V2: Stage Migration Heatmap (EAD $B) ─────────────────────────────────
+    with row1_right:
+        stage_labels = {1: 'Stage 1\n(Performing)', 2: 'Stage 2\n(Watch)', 3: 'Stage 3\n(Impaired)'}
+        z_vals  = mig_abs.values.tolist()
+        zp_vals = mig_pct.values.tolist()
+
+        text_vals = []
+        for r_idx, row_abs in enumerate(z_vals):
+            row_txt = []
+            for c_idx, cell in enumerate(row_abs):
+                pct = zp_vals[r_idx][c_idx]
+                row_txt.append(f"${cell:.1f}B<br>{pct:.1f}%")
+            text_vals.append(row_txt)
+
+        # Custom colorscale: diagonal=green, off-diagonal upper-right=red
+        colorscale = [
+            [0.0,  '#1a4a1a'],
+            [0.3,  '#2ecc71'],
+            [0.6,  '#e67e22'],
+            [1.0,  '#e74c3c'],
+        ]
+
+        fig = go.Figure(go.Heatmap(
+            z=z_vals,
+            x=[stage_labels.get(c, str(c)) for c in mig_abs.columns],
+            y=[stage_labels.get(r, str(r)) for r in mig_abs.index],
+            text=text_vals,
+            texttemplate="%{text}",
+            textfont=dict(size=10, color='white'),
+            colorscale=colorscale,
+            showscale=True,
+            colorbar=dict(
+                title=dict(text='EAD ($B)', font=dict(size=9, color=TXT)),
+                tickfont=dict(size=8, color=TXT),
+                len=0.8,
+            ),
+        ))
+
+        lo = L(f'IFRS 9 Stage Migration Matrix — EAD ($B) | Stress ×{stress_level:.2f}', h=280)
+        lo['xaxis'] = dict(title='Stage at T+1 (Stressed)', tickfont=dict(size=9, color=TXT),
+                           showgrid=False, zeroline=False, side='bottom')
+        lo['yaxis'] = dict(title='Stage at T (Current)', tickfont=dict(size=9, color=TXT),
+                           showgrid=False, zeroline=False, autorange='reversed')
+        lo['margin'] = dict(l=4, r=10, t=42, b=40)
+        lo['annotations'] = []
+
+        # Highlight diagonal (stable) cells
+        for i in range(len(mig_abs)):
+            lo['annotations'].append(dict(
+                x=i, y=i, text='✓ Stable',
+                showarrow=False, font=dict(size=7, color='#aaffaa'),
+                xref='x', yref='y'
+            ))
+
+        fig.update_layout(**lo)
+        st.plotly_chart(fig, use_container_width=True)
+
+    # ════════════════════════════════════════════════════════════════
+    # ROW 2 — V3: ECL Fan Chart (full width — flagship chart)
+    # ════════════════════════════════════════════════════════════════
+    st.markdown("#### 📊 ECL 12-Month Forward Projection — Macro Scenario Fan Chart")
+
+    if not ecl_proj.empty and scenarios_sel:
+        fig = go.Figure()
+
+        # Shade uncertainty band (Optimistic to Severe)
+        opt_data = ecl_proj[ecl_proj['Scenario'] == 'Optimistic']
+        sev_data = ecl_proj[ecl_proj['Scenario'] == 'Severe']
+        if not opt_data.empty and not sev_data.empty:
+            fig.add_trace(go.Scatter(
+                x=list(opt_data['Month']) + list(sev_data['Month'][::-1]),
+                y=list(opt_data['ECL_B']) + list(sev_data['ECL_B'][::-1]),
+                fill='toself',
+                fillcolor='rgba(100,100,100,0.12)',
+                line=dict(color='rgba(0,0,0,0)'),
+                showlegend=True,
+                name='Uncertainty Band',
+                hoverinfo='skip',
+            ))
+
+        # Plot each selected scenario line
+        for scenario in ['Optimistic', 'Base', 'Adverse', 'Severe']:
+            if scenario not in scenarios_sel:
+                continue
+            sub = ecl_proj[ecl_proj['Scenario'] == scenario]
+            width = 3 if scenario == 'Base' else 2
+            dash = 'solid' if scenario in ['Base', 'Severe'] else 'dot'
+            fig.add_trace(go.Scatter(
+                x=sub['Month'],
+                y=sub['ECL_B'],
+                mode='lines+markers',
+                name=scenario,
+                line=dict(color=MACRO_COLORS[scenario], width=width, dash=dash),
+                marker=dict(size=5),
+                hovertemplate=(
+                    f"<b>{scenario}</b><br>"
+                    "Month: %{x}<br>"
+                    "ECL: $%{y:.2f}B<extra></extra>"
+                )
+            ))
+
+        # Current provision line
+        fig.add_hline(
+            y=ecl_now,
+            line_dash='dash', line_color='#ffffff', line_width=1.5,
+            annotation_text=f"Current Provision ${ecl_now:.1f}B",
+            annotation_position="top left",
+            annotation_font_color='#ffffff',
+            annotation_font_size=10,
+        )
+
+        # Capital buffer annotation (Severe - Base at horizon)
+        if 'Severe' in scenarios_sel and 'Base' in scenarios_sel:
+            buffer = ecl_severe_12 - ecl_base_12
+            fig.add_annotation(
+                x=horizon, y=ecl_severe_12,
+                text=f"Capital Buffer Needed<br><b>${buffer:.1f}B</b>",
+                showarrow=True, arrowhead=2, arrowcolor='#e74c3c',
+                font=dict(color='#e74c3c', size=10),
+                bgcolor='rgba(20,20,40,0.8)',
+                bordercolor='#e74c3c',
+                ax=-60, ay=-40,
+            )
+
+        lo = L(f'ECL Trend Projection — {horizon}-Month Fan Chart (Simple Scalar × Macro Path)', h=340, legend=True)
+        lo['xaxis'] = dict(title='Month Forward', tickfont=dict(size=10, color=TXT),
+                           showgrid=True, gridcolor='#0e1e34', zeroline=False,
+                           tickmode='linear', tick0=1, dtick=1)
+        lo['yaxis'] = dict(title='Total ECL ($B)', tickfont=dict(size=10, color=TXT),
+                           showgrid=True, gridcolor='#0e1e34', zeroline=False,
+                           tickprefix='$', ticksuffix='B')
+        lo['legend'] = dict(font=dict(size=10, color=TXT), bgcolor='rgba(0,0,0,0)',
+                            orientation='h', x=0.5, xanchor='center', y=-0.15)
+        lo['margin'] = dict(l=4, r=20, t=42, b=50)
+        fig.update_layout(**lo)
+        st.plotly_chart(fig, use_container_width=True)
+
+        # Scenario summary table
+        summary_rows = []
+        for sc in ['Optimistic', 'Base', 'Adverse', 'Severe']:
+            if sc not in scenarios_sel:
+                continue
+            end_ecl = ecl_proj[ecl_proj['Scenario'] == sc]['ECL_B'].iloc[-1]
+            change = (end_ecl - ecl_now) / ecl_now * 100
+            summary_rows.append({
+                'Scenario': sc,
+                f'ECL Month {horizon} ($B)': f"${end_ecl:.2f}B",
+                'Change vs Now': f"{change:+.1f}%",
+                'Weight': f"{int(ecl_proj[ecl_proj['Scenario']==sc]['Weight'].iloc[0]*100)}%",
+            })
+        if summary_rows:
+            st.dataframe(pd.DataFrame(summary_rows).set_index('Scenario'),
+                         use_container_width=True)
+
+    # ════════════════════════════════════════════════════════════════
+    # ROW 3 — V4: Cohort Bubble  |  V5: Intraday Heatmap
+    # ════════════════════════════════════════════════════════════════
+    row3_left, row3_right = st.columns(2)
+
+    # ── V4: Cohort Default Rate Bubble ───────────────────────────────────────
+    with row3_left:
+        if not cohort_df.empty:
+            tenure_order = ['<1yr', '1-3yr', '3-5yr', '5-10yr', '>10yr']
+            tenure_colors = ['#e74c3c', '#e67e22', '#f1c40f', '#2ecc71', '#27ae60']
+            t_color_map = dict(zip(tenure_order, tenure_colors))
+
+            fig = go.Figure()
+            for tenure in tenure_order:
+                sub = cohort_df[cohort_df['TENURE_BAND'] == tenure]
+                if sub.empty:
+                    continue
+                fig.add_trace(go.Scatter(
+                    x=sub['AGE_BAND'],
+                    y=sub['default_rate_pct'],
+                    mode='markers',
+                    name=tenure,
+                    marker=dict(
+                        size=(sub['total_ead_B'] * 18).clip(8, 60),
+                        color=t_color_map.get(tenure, '#aaaaaa'),
+                        opacity=0.85,
+                        line=dict(color='white', width=1)
+                    ),
+                    hovertemplate=(
+                        f"<b>Age: %{{x}} | Tenure: {tenure}</b><br>"
+                        "Default Rate: %{y:.1f}%<br>"
+                        f"Total EAD: $" + "%{customdata[0]:.1f}B<br>"
+                        "Avg PD: %{customdata[1]:.1f}%<extra></extra>"
+                    ),
+                    customdata=sub[['total_ead_B', 'avg_pd']].assign(
+                        avg_pd=sub['avg_pd'] * 100
+                    ).values,
+                ))
+
+            # Avg default rate line
+            avg_default = cohort_df['default_rate_pct'].mean()
+            fig.add_hline(y=avg_default, line_dash='dot', line_color='#ffffff',
+                          annotation_text=f"Avg {avg_default:.1f}%",
+                          annotation_font_color='#ffffff', annotation_font_size=9)
+
+            lo = L('Cohort Default Rate — Age Band × Job Tenure (Bubble Size = EAD $B)', h=280, legend=True)
+            lo['xaxis'] = dict(title='Age Band', tickfont=dict(size=9, color=TXT),
+                               showgrid=False, zeroline=False)
+            lo['yaxis'] = dict(title='Default Rate (%)', tickfont=dict(size=9, color=TXT),
+                               showgrid=True, gridcolor='#0e1e34', zeroline=False)
+            lo['legend'] = dict(font=dict(size=9, color=TXT), bgcolor='rgba(0,0,0,0)',
+                                title=dict(text='Job Tenure', font=dict(size=9, color=TXT)))
+            lo['margin'] = dict(l=4, r=10, t=42, b=30)
+            fig.update_layout(**lo)
+            st.plotly_chart(fig, use_container_width=True)
+
+    # ── V5: Intraday Risk Pattern ─────────────────────────────────────────────
+    with row3_right:
+        if not intra_pivot.empty:
+            fig = make_subplots(
+                rows=2, cols=1,
+                row_heights=[0.7, 0.3],
+                vertical_spacing=0.08,
+                subplot_titles=('High-Risk Rate by Hour × Weekday (%)', 'Application Volume by Hour')
+            )
+
+            # Main heatmap
+            fig.add_trace(go.Heatmap(
+                z=intra_pivot.values.tolist(),
+                x=list(intra_pivot.columns),
+                y=list(intra_pivot.index),
+                colorscale='RdYlGn_r',
+                showscale=True,
+                colorbar=dict(
+                    title=dict(text='High-Risk %', font=dict(size=8, color=TXT)),
+                    tickfont=dict(size=7, color=TXT),
+                    len=0.6, y=0.75,
+                ),
+                hovertemplate="Day: %{y}<br>Hour: %{x}:00<br>High-Risk: %{z:.1f}%<extra></extra>",
+            ), row=1, col=1)
+
+            # Volume bar (bottom)
+            if not hourly_df.empty:
+                fig.add_trace(go.Bar(
+                    x=hourly_df['Hour'],
+                    y=hourly_df['volume'],
+                    marker=dict(color=BLU, opacity=0.7),
+                    name='Volume',
+                    hovertemplate="Hour: %{x}:00<br>Applications: %{y:,}<extra></extra>",
+                    showlegend=False,
+                ), row=2, col=1)
+
+            # Highlight off-hours band
+            for hour_start, hour_end in [(0, 6), (22, 24)]:
+                fig.add_vrect(
+                    x0=hour_start - 0.5, x1=hour_end - 0.5,
+                    fillcolor='rgba(231,76,60,0.08)',
+                    line_width=0, row='all', col=1,
+                )
+
+            lo = L('Intraday Risk Pattern — Peak Hours for High-Risk Applications', h=320)
+            lo['xaxis']  = dict(title='Hour of Day', tickfont=dict(size=8, color=TXT),
+                                showgrid=False, zeroline=False,
+                                tickmode='linear', tick0=0, dtick=3)
+            lo['xaxis2'] = dict(title='Hour of Day', tickfont=dict(size=8, color=TXT),
+                                showgrid=False, zeroline=False,
+                                tickmode='linear', tick0=0, dtick=3)
+            lo['yaxis']  = dict(tickfont=dict(size=8, color=TXT), showgrid=False)
+            lo['yaxis2'] = dict(title='Volume', tickfont=dict(size=8, color=TXT), showgrid=False)
+            lo['margin'] = dict(l=4, r=60, t=50, b=30)
+            lo['paper_bgcolor'] = BG
+            lo['plot_bgcolor'] = BG
+            lo['font'] = dict(color=TXT)
+            fig.update_layout(**lo)
+            st.plotly_chart(fig, use_container_width=True)
+
+            # Insight callout
+            if peak_pct > 0:
+                off_hours = hourly_df[
+                    (hourly_df['Hour'] < 6) | (hourly_df['Hour'] >= 22)
+                ]['high_risk_pct'].mean()
+                biz_hours = hourly_df[
+                    (hourly_df['Hour'] >= 9) & (hourly_df['Hour'] < 17)
+                ]['high_risk_pct'].mean()
+                delta = off_hours - biz_hours
+                st.markdown(
+                    f"<small style='color:#e67e22'>⚠ Off-hours (22h–6h) high-risk rate: "
+                    f"<b>{off_hours:.1f}%</b> vs business hours: <b>{biz_hours:.1f}%</b> "
+                    f"(+{delta:.1f}pp) → Recommend mandatory manual review for off-hour applications</small>",
+                    unsafe_allow_html=True
+                )
