@@ -502,7 +502,7 @@ from src.time_series_engine import (
     MACRO_COLORS
 )
 
-main_tab, insights_tab, trend_tab = st.tabs(["Credit Risk Analyst", "Insights", "📈 Trend & Time Series"])
+main_tab, insights_tab, trend_tab = st.tabs(["Credit Risk Analyst", "Insights", "📈 Trend & Scenario Analytics"])
 
 
 with main_tab:
@@ -854,7 +854,7 @@ with insights_tab:
         st.plotly_chart(fig, use_container_width=True)
 
 # ═══════════════════════════════════════════════════════════════════
-# TAB 3 — TREND & TIME SERIES
+# TAB 3 — PERFORMANCE TRENDS
 # ═══════════════════════════════════════════════════════════════════
 with trend_tab:
 
@@ -932,19 +932,19 @@ with trend_tab:
     # ════════════════════════════════════════════════════════════════
     row1_left, row1_right = st.columns(2)
 
-    # ── V1: Portfolio Vintage Analysis ───────────────────────────────────────
+    # ── V1: Proxy Cohort Analysis (Loan Term Band) ───────────────────────────
     with row1_left:
         cohorts = sorted(vintage_df['COHORT'].unique())
         palette = ['#2ecc71', '#27ae60', '#3498db', '#2980b9',
                    '#e67e22', '#d35400', '#e74c3c', '#c0392b']
-        mob_order = ['0-12m', '12-18m', '18-24m', '24-36m', '36m+']
+        term_order = ['\u226412m', '13-18m', '19-24m', '25-36m', '37m+']
 
         fig = go.Figure()
         for i, cohort in enumerate(cohorts):
             sub = vintage_df[vintage_df['COHORT'] == cohort]
-            sub = sub[sub['MOB_BUCKET'].isin(mob_order)]
+            sub = sub[sub['TERM_BAND'].isin(term_order)]
             fig.add_trace(go.Scatter(
-                x=sub['MOB_BUCKET'],
+                x=sub['TERM_BAND'],
                 y=sub['default_rate_pct'],
                 mode='lines+markers',
                 name=cohort,
@@ -952,21 +952,22 @@ with trend_tab:
                 marker=dict(size=6),
                 hovertemplate=(
                     f"<b>{cohort}</b><br>"
-                    "MOB: %{x}<br>"
+                    "Loan Term: %{x}<br>"
                     "Default Rate: %{y:.1f}%<extra></extra>"
                 )
             ))
 
-        # Bank average line
+        # Portfolio average line
         avg_dr = vintage_df['default_rate_pct'].mean()
         fig.add_hline(y=avg_dr, line_dash='dot', line_color='#ffffff',
                       annotation_text=f"Portfolio Avg {avg_dr:.1f}%",
                       annotation_font_color='#ffffff')
 
-        lo = L('Portfolio Vintage Analysis — Default Rate by Cohort (MOB)', h=280, legend=True)
-        lo['xaxis'] = dict(title='Months on Book (MOB)', tickfont=dict(size=9, color=TXT),
+        lo = L('Proxy Cohort Analysis \u2014 Default Rate by Cohort \u00d7 Loan Term Band \u00b9', h=280, legend=True)
+        lo['xaxis'] = dict(title='Loan Term Band at Origination (Proxy for MOB)',
+                           tickfont=dict(size=9, color=TXT),
                            showgrid=False, zeroline=False, categoryorder='array',
-                           categoryarray=mob_order)
+                           categoryarray=term_order)
         lo['yaxis'] = dict(title='Default Rate (%)', tickfont=dict(size=9, color=TXT),
                            showgrid=True, gridcolor='#0e1e34', zeroline=False)
         lo['legend'] = dict(font=dict(size=8, color=TXT), bgcolor='rgba(0,0,0,0)',
@@ -974,6 +975,11 @@ with trend_tab:
         lo['margin'] = dict(l=4, r=80, t=40, b=30)
         fig.update_layout(**lo)
         st.plotly_chart(fig, use_container_width=True)
+        st.caption(
+            "\u00b9 Proxy: DAYS_ID_PUBLISH used as cohort date approximation (not actual disbursement date). "
+            "X-axis = Loan Term Band, not Months on Book (MOB). "
+            "Interpret as: 'borrowers onboarded around Q[X] with loan term ~Y months have default rate Z%.'"
+        )
 
     # ── V2: Stage Migration Heatmap (EAD $B) ─────────────────────────────────
     with row1_right:

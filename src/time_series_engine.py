@@ -35,28 +35,36 @@ HIGH_RISK_THRESHOLD = 0.48
 def build_vintage_data(df: pd.DataFrame) -> pd.DataFrame:
     """
     Build vintage cohort data using DAYS_ID_PUBLISH as a proxy for
-    application date. Returns default rate per cohort x MOB bucket.
+    application date. Returns default rate per cohort x loan-term bucket.
+
+    PROXY NOTE: DAYS_ID_PUBLISH = days before REF_DATE when the ID was
+    last published. It approximates when the customer was onboarded, but
+    is NOT the actual disbursement/application date. Results should be
+    labelled 'Proxy Vintage' and not presented as exact vintage curves.
+    X-axis = Loan Term Band (CREDIT_TERM buckets), NOT Months on Book.
     """
     dfc = df.copy()
 
-    # Derive cohort quarter from DAYS_ID_PUBLISH
-    dfc['APP_DATE'] = REF_DATE + pd.to_timedelta(
+    # FIX: DAYS_ID_PUBLISH is negative (X days BEFORE REF_DATE)
+    # so APP_DATE = REF_DATE - abs(DAYS_ID_PUBLISH) = a date in the past
+    dfc['APP_DATE'] = REF_DATE - pd.to_timedelta(
         dfc['DAYS_ID_PUBLISH'].abs().clip(0, 1460), unit='D'
     )
     dfc['COHORT'] = dfc['APP_DATE'].dt.to_period('Q').astype(str)
 
-    # Months on Book proxy: CREDIT_TERM - remaining term (use decile bucket)
+    # Loan Term Band (NOT Months on Book — honest labelling)
+    # CREDIT_TERM = total loan duration in months at origination
     dfc['CREDIT_TERM'] = dfc['CREDIT_TERM'].clip(6, 60).fillna(24)
-    dfc['MOB_BUCKET'] = pd.cut(
+    dfc['TERM_BAND'] = pd.cut(
         dfc['CREDIT_TERM'],
         bins=[0, 12, 18, 24, 36, 60],
-        labels=['0-12m', '12-18m', '18-24m', '24-36m', '36m+']
+        labels=['≤12m', '13-18m', '19-24m', '25-36m', '37m+']
     ).astype(str)
 
     target_col = 'TARGET' if 'TARGET' in dfc.columns else None
     if target_col:
         vintage = (
-            dfc.groupby(['COHORT', 'MOB_BUCKET'])
+            dfc.groupby(['COHORT', 'TERM_BAND'])
             .agg(
                 default_rate=(target_col, 'mean'),
                 count=('SK_ID_CURR', 'count'),
@@ -69,7 +77,7 @@ def build_vintage_data(df: pd.DataFrame) -> pd.DataFrame:
         vintage['avg_pd_pct'] = vintage['avg_pd'] * 100
     else:
         vintage = (
-            dfc.groupby(['COHORT', 'MOB_BUCKET'])
+            dfc.groupby(['COHORT', 'TERM_BAND'])
             .agg(
                 avg_pd=('PRED_PROB', 'mean'),
                 count=('SK_ID_CURR', 'count'),
