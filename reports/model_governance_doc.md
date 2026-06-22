@@ -101,6 +101,20 @@ Calibration:  Isotonic Regression (post-hoc, fitted on fold 5 OOF predictions)
 | **Gini Coefficient** | **0.5673** | > 0.40 = Acceptable | ✅ PASS |
 | **Lift vs Baseline** | **+4.37 AUC pts** | LightGBM vs Logistic Reg | ✅ PASS |
 
+### 4.1.1 Multi-Algorithm Benchmark
+
+The refreshed benchmark compares five algorithms. The complete output is stored in `reports/model_comparison_leaderboard.csv`.
+
+| Model | OOF AUC | Gini | KS | Brier |
+|---|---:|---:|---:|---:|
+| CatBoost | 0.7834 | 0.5669 | 42.65 | 0.17807 |
+| LightGBM | 0.7830 | 0.5660 | 42.56 | 0.17655 |
+| XGBoost | 0.7747 | 0.5494 | 41.29 | 0.14692 |
+| LogisticRegression | 0.7675 | 0.5349 | 40.21 | 0.19578 |
+| RandomForest | 0.7598 | 0.5195 | 39.02 | 0.18170 |
+
+**Validation note:** Logistic Regression is retained as the transparent linear challenger/baseline. Boosting models remain stronger for final PD scoring, with CatBoost and LightGBM nearly tied in this run.
+
 ### 4.2 Calibration
 
 | Metric | Before Calibration | After Isotonic Regression | Status |

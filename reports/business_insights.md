@@ -26,6 +26,20 @@ The model enables the bank to classify borrowers into four risk tiers, with the 
 | PSI (Train→Test) | **0.0045** | No distribution shift detected — model is stable |
 | Baseline (Logistic Regression) | 0.7400 | LightGBM lift: **+4.37 AUC points** |
 
+### Multi-Algorithm Benchmark
+
+The refreshed modeling pipeline benchmarks five algorithms under the same 5-fold stratified CV framework. Results are saved in `reports/model_comparison_leaderboard.csv`.
+
+| Model | OOF AUC | CV AUC | CV Accuracy | CV Precision | CV Recall | CV F1 | CV Specificity | Gini | KS | Brier |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| CatBoost | 0.7834 | 0.7835 ± 0.0039 | 0.7097 ± 0.0210 | 0.1789 ± 0.0076 | 0.7194 ± 0.0280 | 0.2862 ± 0.0077 | 0.7088 ± 0.0252 | 0.5669 | 42.65 | 0.17807 |
+| LightGBM | 0.7830 | 0.7831 ± 0.0036 | 0.7060 ± 0.0117 | 0.1769 ± 0.0035 | 0.7225 ± 0.0206 | 0.2842 ± 0.0032 | 0.7046 ± 0.0145 | 0.5660 | 42.56 | 0.17655 |
+| XGBoost | 0.7747 | 0.7747 ± 0.0036 | 0.7058 ± 0.0173 | 0.1750 ± 0.0064 | 0.7092 ± 0.0197 | 0.2805 ± 0.0068 | 0.7055 ± 0.0205 | 0.5494 | 41.29 | 0.14692 |
+| LogisticRegression | 0.7675 | 0.7675 ± 0.0039 | 0.6987 ± 0.0220 | 0.1709 ± 0.0083 | 0.7055 ± 0.0247 | 0.2749 ± 0.0086 | 0.6981 ± 0.0260 | 0.5349 | 40.21 | 0.19578 |
+| RandomForest | 0.7598 | 0.7598 ± 0.0024 | 0.6819 ± 0.0093 | 0.1632 ± 0.0022 | 0.7123 ± 0.0147 | 0.2656 ± 0.0021 | 0.6792 ± 0.0113 | 0.5195 | 39.02 | 0.18170 |
+
+**Interpretation:** CatBoost and LightGBM are effectively tied on discrimination in this run. Logistic Regression remains useful as a transparent linear benchmark, but trails tree-based boosting on AUC and Gini.
+
 ---
 
 ## Top Risk Drivers (SHAP Analysis)

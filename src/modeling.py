@@ -4,7 +4,7 @@ modeling.py — Phase 3: Modeling (UPGRADED v3.0)
 Home Credit Default Risk — Enterprise Grade
 
 Nâng cấp trong phiên bản này:
-  [NEW] Multi-Model Benchmark (LightGBM, XGBoost, CatBoost, RandomForest)
+  [NEW] Multi-Model Benchmark (LightGBM, XGBoost, CatBoost, RandomForest, LogisticRegression)
   [NEW] MLflow logging cho tất cả các mô hình.
   [NEW] Báo cáo model_comparison_leaderboard.csv
   [NEW] Calibration Isotonic chỉ trên Winner Model.

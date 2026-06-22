@@ -125,6 +125,35 @@ def simulate_historical_lgd(df: pd.DataFrame) -> pd.Series:
     return lgd
 
 
+def estimate_lgd(df: pd.DataFrame) -> pd.Series:
+    """
+    Deterministic LGD estimate for IFRS 9 ECL.
+
+    Reuse an existing LGD column when available. Otherwise use the same
+    segment/collateral/down-payment rules as the simulator, without synthetic
+    noise, so provisioning is reproducible.
+    """
+    if 'LGD' in df.columns:
+        return pd.to_numeric(df['LGD'], errors='coerce').fillna(LGD_TABLE['_default']).clip(0.20, 0.95)
+
+    lgd = pd.Series(LGD_TABLE['_default'], index=df.index, dtype=float)
+    contract_series = _get_contract_series(df)
+    amt_credit = df.get('AMT_CREDIT', pd.Series(1, index=df.index)).fillna(1).clip(lower=1)
+    amt_goods = df.get('AMT_GOODS_PRICE', pd.Series(0, index=df.index)).fillna(0)
+    has_collateral = (amt_goods / amt_credit) > 0.70
+
+    for ct, lgd_dict in LGD_TABLE.items():
+        if ct == '_default':
+            continue
+        ct_mask = contract_series == ct
+        for coll_bool, lgd_val in lgd_dict.items():
+            lgd[ct_mask & (has_collateral == coll_bool)] = lgd_val
+
+    down_payment = (amt_goods - amt_credit).clip(lower=0)
+    dp_ratio = (down_payment / amt_goods.clip(lower=1)).clip(0, 0.50)
+    return (lgd - dp_ratio * 0.40).clip(lower=0.20, upper=0.95)
+
+
 def train_lgd_regressor(df: pd.DataFrame):
     """
     Huấn luyện mô hình Hồi quy LGD trên tập vỡ nợ (TARGET = 1) với 5-Fold CV.
