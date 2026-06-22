@@ -27,7 +27,10 @@ from sklearn.model_selection import StratifiedKFold
 from sklearn.calibration import calibration_curve
 from sklearn.isotonic import IsotonicRegression
 from sklearn.metrics import (roc_auc_score, roc_curve, brier_score_loss,
-                             precision_recall_curve, average_precision_score)
+                             precision_recall_curve, average_precision_score,
+                             accuracy_score, precision_score, recall_score,
+                             f1_score, confusion_matrix)
+import seaborn as sns
 
 import lightgbm as lgb
 import xgboost as xgb
@@ -143,6 +146,8 @@ for model_name, model in models_dict.items():
         test_preds = np.zeros(len(test_df))
         fold_models = []
         
+        fold_metrics = {'auc': [], 'acc': [], 'prec': [], 'rec': [], 'f1': [], 'spec': []}
+        
         for fold, (train_idx, val_idx) in enumerate(skf.split(X, y)):
             X_tr, X_vl = X.iloc[train_idx], X.iloc[val_idx]
             y_tr, y_vl = y.iloc[train_idx], y.iloc[val_idx]
@@ -169,6 +174,29 @@ for model_name, model in models_dict.items():
             test_preds += model.predict_proba(test_df_clean)[:, 1] / skf.n_splits
             fold_models.append(model)
             
+            # Calculate metrics for THIS fold
+            f_auc = roc_auc_score(y_vl, fold_oof)
+            
+            # Find optimal threshold using Youden's J for the fold
+            f_fpr, f_tpr, f_thres = roc_curve(y_vl, fold_oof)
+            f_opt_th = f_thres[np.argmax(f_tpr - f_fpr)]
+            f_pred_bin = (fold_oof >= f_opt_th).astype(int)
+            
+            f_acc = accuracy_score(y_vl, f_pred_bin)
+            f_prec = precision_score(y_vl, f_pred_bin, zero_division=0)
+            f_rec = recall_score(y_vl, f_pred_bin)
+            f_f1 = f1_score(y_vl, f_pred_bin)
+            
+            tn, fp, fn, tp = confusion_matrix(y_vl, f_pred_bin).ravel()
+            f_spec = tn / (tn + fp) if (tn + fp) > 0 else 0
+            
+            fold_metrics['auc'].append(f_auc)
+            fold_metrics['acc'].append(f_acc)
+            fold_metrics['prec'].append(f_prec)
+            fold_metrics['rec'].append(f_rec)
+            fold_metrics['f1'].append(f_f1)
+            fold_metrics['spec'].append(f_spec)
+            
         oof_auc = roc_auc_score(y, oof_preds)
         fpr, tpr, _ = roc_curve(y, oof_preds)
         ks_stat = (tpr - fpr).max() * 100
@@ -177,16 +205,55 @@ for model_name, model in models_dict.items():
         
         log(f"{model_name} OOF AUC: {oof_auc:.4f} | KS: {ks_stat:.2f} | Gini: {gini:.4f}")
         
+        # Cross Validation Mean & Std
+        cv_auc_m, cv_auc_s = np.mean(fold_metrics['auc']), np.std(fold_metrics['auc'])
+        cv_acc_m, cv_acc_s = np.mean(fold_metrics['acc']), np.std(fold_metrics['acc'])
+        cv_prec_m, cv_prec_s = np.mean(fold_metrics['prec']), np.std(fold_metrics['prec'])
+        cv_rec_m, cv_rec_s = np.mean(fold_metrics['rec']), np.std(fold_metrics['rec'])
+        cv_f1_m, cv_f1_s = np.mean(fold_metrics['f1']), np.std(fold_metrics['f1'])
+        cv_spec_m, cv_spec_s = np.mean(fold_metrics['spec']), np.std(fold_metrics['spec'])
+        
+        # OOF Confusion Matrix
+        f_fpr_all, f_tpr_all, f_thres_all = roc_curve(y, oof_preds)
+        oof_opt_th = f_thres_all[np.argmax(f_tpr_all - f_fpr_all)]
+        oof_bin = (oof_preds >= oof_opt_th).astype(int)
+        cm = confusion_matrix(y, oof_bin)
+        
+        log(f"CV AUC: {cv_auc_m:.4f}±{cv_auc_s:.4f} | F1: {cv_f1_m:.4f}±{cv_f1_s:.4f}")
+        log(f"Confusion Matrix (OOF):\n{cm}")
+        
         mlflow.log_metrics({
             "oof_auc": oof_auc,
+            "cv_auc_mean": cv_auc_m, "cv_auc_std": cv_auc_s,
+            "cv_acc_mean": cv_acc_m, "cv_acc_std": cv_acc_s,
+            "cv_prec_mean": cv_prec_m, "cv_prec_std": cv_prec_s,
+            "cv_rec_mean": cv_rec_m, "cv_rec_std": cv_rec_s,
+            "cv_f1_mean": cv_f1_m, "cv_f1_std": cv_f1_s,
+            "cv_spec_mean": cv_spec_m, "cv_spec_std": cv_spec_s,
             "ks_statistic": ks_stat,
             "gini": gini,
             "brier_score": brier
         })
         
+        # Draw and save Confusion Matrix plot
+        plt.figure(figsize=(6,5))
+        sns.heatmap(cm, annot=True, fmt='d', cmap='Blues')
+        plt.title(f'Confusion Matrix - {model_name}')
+        plt.ylabel('True Label')
+        plt.xlabel('Predicted Label')
+        plt.tight_layout()
+        plt.savefig(os.path.join(REPORTS_DIR, f'confusion_matrix_{model_name}.png'), dpi=150)
+        plt.close()
+        
         benchmark_results.append({
             'Model': model_name,
             'OOF_AUC': round(oof_auc, 4),
+            'CV_AUC (Mean±Std)': f"{cv_auc_m:.4f} ± {cv_auc_s:.4f}",
+            'CV_Accuracy': f"{cv_acc_m:.4f} ± {cv_acc_s:.4f}",
+            'CV_Precision': f"{cv_prec_m:.4f} ± {cv_prec_s:.4f}",
+            'CV_Recall': f"{cv_rec_m:.4f} ± {cv_rec_s:.4f}",
+            'CV_F1_Score': f"{cv_f1_m:.4f} ± {cv_f1_s:.4f}",
+            'CV_Specificity': f"{cv_spec_m:.4f} ± {cv_spec_s:.4f}",
             'Gini_Coefficient': round(gini, 4),
             'KS_Statistic': round(ks_stat, 2),
             'Brier_Score': round(brier, 5)

@@ -16,6 +16,9 @@ References:
     BCBS d374       — Revisions to IRB approach
     Basel II §296-297 — LGD floors
 """
+import sys, io
+sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
+
 import pandas as pd
 import numpy as np
 import matplotlib
@@ -23,6 +26,10 @@ matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import os
 from pathlib import Path
+
+import lightgbm as lgb
+from sklearn.model_selection import KFold
+from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
 DATA_DIR = str(ROOT_DIR / 'data')
@@ -73,7 +80,7 @@ def _get_contract_series(df: pd.DataFrame) -> pd.Series:
     return contract_series
 
 
-def estimate_lgd(df: pd.DataFrame) -> pd.Series:
+def simulate_historical_lgd(df: pd.DataFrame) -> pd.Series:
     """
     Ước lượng LGD cá nhân hoá cho từng applicant.
 
@@ -106,7 +113,74 @@ def estimate_lgd(df: pd.DataFrame) -> pd.Series:
     dp_ratio       = (down_payment / amt_goods.clip(lower=1)).clip(0, 0.50)
     lgd_adjustment = dp_ratio * 0.40
     lgd            = (lgd - lgd_adjustment).clip(lower=0.35, upper=0.90)
+    
+    # Add noise to simulate ground truth
+    np.random.seed(42)
+    noise = np.random.normal(0, 0.05, size=len(lgd))
+    lgd = (lgd + noise).clip(0.20, 0.95)
     return lgd
+
+
+def train_lgd_regressor(df: pd.DataFrame):
+    """
+    Huấn luyện mô hình Hồi quy LGD trên tập vỡ nợ (TARGET = 1) với 5-Fold CV.
+    """
+    df['ACTUAL_LGD'] = simulate_historical_lgd(df)
+    
+    # Lọc hồ sơ vỡ nợ để train LGD
+    df_defaults = df[df['TARGET'] == 1].copy()
+    if len(df_defaults) < 100:
+        df_defaults = df.copy()
+        
+    features = [c for c in df.columns if c not in ['SK_ID_CURR', 'TARGET', 'PRED_PROB', 'ACTUAL_LGD', 'NAME_CONTRACT_TYPE', 'LGD', 'EAD', 'RISK_TIER']]
+    X = df_defaults[features].select_dtypes(include=[np.number]).fillna(0)
+    y = df_defaults['ACTUAL_LGD']
+    
+    kf = KFold(n_splits=5, shuffle=True, random_state=42)
+    metrics = {'mae': [], 'mse': [], 'rmse': [], 'r2': []}
+    
+    print(f"\n{'='*65}")
+    print(f"  Training LGD Regressor (LightGBM) - 5-Fold CV")
+    print(f"{'='*65}")
+    
+    for fold, (train_idx, val_idx) in enumerate(kf.split(X, y)):
+        X_tr, X_vl = X.iloc[train_idx], X.iloc[val_idx]
+        y_tr, y_vl = y.iloc[train_idx], y.iloc[val_idx]
+        
+        model = lgb.LGBMRegressor(
+            n_estimators=200, learning_rate=0.05, max_depth=6, 
+            random_state=42, n_jobs=-1, verbose=-1
+        )
+        model.fit(X_tr, y_tr, eval_set=[(X_vl, y_vl)], callbacks=[lgb.early_stopping(20, verbose=False)])
+        
+        preds = model.predict(X_vl)
+        
+        metrics['mae'].append(mean_absolute_error(y_vl, preds))
+        metrics['mse'].append(mean_squared_error(y_vl, preds))
+        metrics['rmse'].append(np.sqrt(mean_squared_error(y_vl, preds)))
+        metrics['r2'].append(r2_score(y_vl, preds))
+        
+    mae_m, mae_s = np.mean(metrics['mae']), np.std(metrics['mae'])
+    mse_m, mse_s = np.mean(metrics['mse']), np.std(metrics['mse'])
+    rmse_m, rmse_s = np.mean(metrics['rmse']), np.std(metrics['rmse'])
+    r2_m, r2_s = np.mean(metrics['r2']), np.std(metrics['r2'])
+    
+    print(f"  CV MAE  : {mae_m:.4f} ± {mae_s:.4f}")
+    print(f"  CV MSE  : {mse_m:.4f} ± {mse_s:.4f}")
+    print(f"  CV RMSE : {rmse_m:.4f} ± {rmse_s:.4f}")
+    print(f"  CV R2   : {r2_m:.4f} ± {r2_s:.4f}")
+    
+    # Train full model
+    final_model = lgb.LGBMRegressor(n_estimators=200, learning_rate=0.05, max_depth=6, random_state=42, n_jobs=-1, verbose=-1)
+    final_model.fit(X, y)
+    
+    with open(f'{REPORTS_DIR}/lgd_regression_metrics.txt', 'w') as f:
+        f.write(f"CV MAE  : {mae_m:.4f} ± {mae_s:.4f}\n")
+        f.write(f"CV MSE  : {mse_m:.4f} ± {mse_s:.4f}\n")
+        f.write(f"CV RMSE : {rmse_m:.4f} ± {rmse_s:.4f}\n")
+        f.write(f"CV R2   : {r2_m:.4f} ± {r2_s:.4f}\n")
+        
+    return final_model, features
 
 
 def estimate_ead(df: pd.DataFrame) -> pd.Series:
@@ -204,7 +278,11 @@ if __name__ == '__main__':
         except Exception as e:
             print(f"  Could not pull fallback data: {e}")
 
-    lgd = estimate_lgd(df)
+    # Train LGD Regression Model & Predict
+    lgd_model, lgd_features = train_lgd_regressor(df)
+    X_all = df[lgd_features].select_dtypes(include=[np.number]).fillna(0)
+    lgd = pd.Series(lgd_model.predict(X_all), index=df.index).clip(0.1, 1.0)
+    
     ead = estimate_ead(df)
 
     print(f"\n LGD distribution:")
