@@ -20,7 +20,7 @@ Test:
 """
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from typing import Optional, List, Dict, Any
 import numpy as np
 import pandas as pd
@@ -31,7 +31,13 @@ from datetime import datetime
 # Configuration
 # ─────────────────────────────────────────────────────────────────────────────
 BASE_DIR   = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-MODELS_DIR = os.path.join(BASE_DIR, 'models')
+MODELS_DIR = os.getenv('CREDIT_RISK_MODELS_DIR', os.path.join(BASE_DIR, 'models'))
+DEFAULT_ORIGINS = "http://localhost:8501,http://127.0.0.1:8501,http://localhost:8000,http://127.0.0.1:8000"
+ALLOWED_ORIGINS = [
+    origin.strip()
+    for origin in os.getenv("CREDIT_RISK_API_CORS_ORIGINS", DEFAULT_ORIGINS).split(",")
+    if origin.strip()
+]
 
 app = FastAPI(
     title="Enterprise Credit Risk Scoring API",
@@ -47,8 +53,8 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
+    allow_origins=ALLOWED_ORIGINS,
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -63,15 +69,52 @@ _tier_cfg   = {}
 _imp_stats  = {}
 _metrics    = {}
 _load_time  = None
+_model_source = None
+
+
+def _available_model_paths() -> list:
+    generic_paths = [
+        os.path.join(MODELS_DIR, f'model_fold{i}.pkl')
+        for i in range(1, 6)
+    ]
+    if all(os.path.exists(p) for p in generic_paths):
+        return generic_paths
+
+    legacy_paths = [
+        os.path.join(MODELS_DIR, f'lgbm_fold{i}.pkl')
+        for i in range(1, 6)
+    ]
+    if all(os.path.exists(p) for p in legacy_paths):
+        return legacy_paths
+
+    best_path = os.path.join(MODELS_DIR, 'best_production_model.pkl')
+    if os.path.exists(best_path):
+        return [best_path]
+
+    return []
 
 
 def load_artifacts():
-    global _models, _features, _calibrator, _tier_cfg, _imp_stats, _metrics, _load_time
+    global _models, _features, _calibrator, _tier_cfg, _imp_stats, _metrics, _load_time, _model_source
 
-    for i in range(1, 6):
-        path = os.path.join(MODELS_DIR, f'lgbm_fold{i}.pkl')
+    model_paths = _available_model_paths()
+    if not model_paths:
+        raise FileNotFoundError(
+            f"No model artifacts found in {MODELS_DIR}. Expected model_fold1-5.pkl, "
+            "legacy lgbm_fold1-5.pkl, or best_production_model.pkl."
+        )
+
+    _models = []
+    _features = []
+    _calibrator = None
+    _tier_cfg = {}
+    _imp_stats = {}
+    _metrics = {}
+
+    for path in model_paths:
         with open(path, 'rb') as f:
             _models.append(pickle.load(f))
+    _model_source = os.path.basename(model_paths[0]) if len(model_paths) == 1 else os.path.basename(model_paths[0]).replace('1', '*')
 
     with open(os.path.join(MODELS_DIR, 'feature_list.pkl'), 'rb') as f:
         raw_features = pickle.load(f)
@@ -99,10 +142,11 @@ def load_artifacts():
     return True
 
 
-try:
-    load_artifacts()
-except Exception as e:
-    print(f"WARNING: Could not load models: {e}")
+if os.getenv("CREDIT_RISK_SKIP_AUTOLOAD") != "1":
+    try:
+        load_artifacts()
+    except Exception as e:
+        print(f"WARNING: Could not load models: {e}")
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -137,8 +181,8 @@ class ApplicantInput(BaseModel):
     # Other
     extra_features: Optional[Dict[str, Any]] = Field(None, description="Any additional raw feature values")
 
-    class Config:
-        json_schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {
                 "EXT_SOURCE_2": 0.72,
                 "EXT_SOURCE_3": 0.65,
@@ -152,6 +196,7 @@ class ApplicantInput(BaseModel):
                 "inst_late_ratio": 0.02,
             }
         }
+    )
 
 
 class ScoreResponse(BaseModel):
@@ -266,9 +311,11 @@ def _top_risk_features(client_df: pd.DataFrame, top_n: int = 3) -> List[str]:
 
 @app.get("/health")
 async def health_check():
+    healthy = bool(_models and _features)
     return {
-        "status":       "healthy",
+        "status":       "healthy" if healthy else "unhealthy",
         "models_loaded": len(_models),
+        "model_source":  _model_source,
         "load_time":    _load_time,
         "timestamp":    datetime.utcnow().isoformat(),
     }
@@ -277,8 +324,9 @@ async def health_check():
 @app.get("/model/info")
 async def model_info():
     return {
-        "model_type":    "LightGBM 5-Fold Ensemble + Isotonic Regression Calibration",
+        "model_type":    _tier_cfg.get("winner_model", "Tree Ensemble") + " + Isotonic Regression Calibration",
         "n_folds":       len(_models),
+        "model_source":  _model_source,
         "n_features":    len(_features),
         "calibrated":    _calibrator is not None,
         "oof_auc":       _metrics.get('oof_auc'),

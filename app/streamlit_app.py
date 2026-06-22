@@ -261,15 +261,15 @@ def load():
     df[float_cols] = df[float_cols].astype('float32')
     df[int_cols] = df[int_cols].astype('int32')
 
-    # --- Defensive UI: Fallback for missing columns ---
+    # --- Defensive UI: deterministic fallbacks for missing segmentation columns ---
     if 'NAME_FAMILY_STATUS' not in df.columns:
-        df['NAME_FAMILY_STATUS'] = np.random.choice(['Married', 'Single / not married'], len(df))
+        df['NAME_FAMILY_STATUS'] = 'Unknown'
     if 'REGION_RATING_CLIENT_W_CITY' not in df.columns:
-        df['REGION_RATING_CLIENT_W_CITY'] = np.random.choice([1, 2, 3], len(df))
+        df['REGION_RATING_CLIENT_W_CITY'] = 0
     if 'CODE_GENDER' not in df.columns:
-        df['CODE_GENDER'] = np.random.choice(['M', 'F'], len(df))
+        df['CODE_GENDER'] = 'Unknown'
     if 'NAME_INCOME_TYPE' not in df.columns:
-        df['NAME_INCOME_TYPE'] = np.random.choice(['Working', 'Commercial associate', 'Pensioner', 'State servant'], len(df))
+        df['NAME_INCOME_TYPE'] = 'Unknown'
 
     # Loan term bins (months)
     df['TERM_M'] = (df['AMT_CREDIT'] / df['AMT_ANNUITY'].clip(lower=1)).round(0)

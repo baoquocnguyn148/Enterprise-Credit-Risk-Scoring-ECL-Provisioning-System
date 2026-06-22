@@ -30,6 +30,10 @@ from pathlib import Path
 import lightgbm as lgb
 from sklearn.model_selection import KFold
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
+from sklearn.linear_model import Ridge
+from sklearn.preprocessing import StandardScaler
+from sklearn.impute import SimpleImputer
+from sklearn.pipeline import Pipeline
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
 DATA_DIR = str(ROOT_DIR / 'data')
@@ -137,48 +141,81 @@ def train_lgd_regressor(df: pd.DataFrame):
     y = df_defaults['ACTUAL_LGD']
     
     kf = KFold(n_splits=5, shuffle=True, random_state=42)
-    metrics = {'mae': [], 'mse': [], 'rmse': [], 'r2': []}
+    metrics_lgb = {'mae': [], 'mse': [], 'rmse': [], 'r2': []}
+    metrics_ridge = {'mae': [], 'mse': [], 'rmse': [], 'r2': []}
     
     print(f"\n{'='*65}")
-    print(f"  Training LGD Regressor (LightGBM) - 5-Fold CV")
+    print(f"  Training LGD Regressors (LightGBM vs Ridge) - 5-Fold CV")
     print(f"{'='*65}")
     
     for fold, (train_idx, val_idx) in enumerate(kf.split(X, y)):
         X_tr, X_vl = X.iloc[train_idx], X.iloc[val_idx]
         y_tr, y_vl = y.iloc[train_idx], y.iloc[val_idx]
         
-        model = lgb.LGBMRegressor(
+        # LightGBM
+        model_lgb = lgb.LGBMRegressor(
             n_estimators=200, learning_rate=0.05, max_depth=6, 
             random_state=42, n_jobs=-1, verbose=-1
         )
-        model.fit(X_tr, y_tr, eval_set=[(X_vl, y_vl)], callbacks=[lgb.early_stopping(20, verbose=False)])
+        model_lgb.fit(X_tr, y_tr, eval_set=[(X_vl, y_vl)], callbacks=[lgb.early_stopping(20, verbose=False)])
+        preds_lgb = model_lgb.predict(X_vl)
         
-        preds = model.predict(X_vl)
+        metrics_lgb['mae'].append(mean_absolute_error(y_vl, preds_lgb))
+        metrics_lgb['mse'].append(mean_squared_error(y_vl, preds_lgb))
+        metrics_lgb['rmse'].append(np.sqrt(mean_squared_error(y_vl, preds_lgb)))
+        metrics_lgb['r2'].append(r2_score(y_vl, preds_lgb))
+
+        # Ridge
+        model_ridge = Pipeline([
+            ('imputer', SimpleImputer(strategy='median')),
+            ('scaler', StandardScaler()),
+            ('regressor', Ridge(alpha=1.0, random_state=42))
+        ])
+        model_ridge.fit(X_tr, y_tr)
+        preds_ridge = model_ridge.predict(X_vl)
+
+        metrics_ridge['mae'].append(mean_absolute_error(y_vl, preds_ridge))
+        metrics_ridge['mse'].append(mean_squared_error(y_vl, preds_ridge))
+        metrics_ridge['rmse'].append(np.sqrt(mean_squared_error(y_vl, preds_ridge)))
+        metrics_ridge['r2'].append(r2_score(y_vl, preds_ridge))
         
-        metrics['mae'].append(mean_absolute_error(y_vl, preds))
-        metrics['mse'].append(mean_squared_error(y_vl, preds))
-        metrics['rmse'].append(np.sqrt(mean_squared_error(y_vl, preds)))
-        metrics['r2'].append(r2_score(y_vl, preds))
-        
-    mae_m, mae_s = np.mean(metrics['mae']), np.std(metrics['mae'])
-    mse_m, mse_s = np.mean(metrics['mse']), np.std(metrics['mse'])
-    rmse_m, rmse_s = np.mean(metrics['rmse']), np.std(metrics['rmse'])
-    r2_m, r2_s = np.mean(metrics['r2']), np.std(metrics['r2'])
+    mae_m, mae_s = np.mean(metrics_lgb['mae']), np.std(metrics_lgb['mae'])
+    mse_m, mse_s = np.mean(metrics_lgb['mse']), np.std(metrics_lgb['mse'])
+    rmse_m, rmse_s = np.mean(metrics_lgb['rmse']), np.std(metrics_lgb['rmse'])
+    r2_m, r2_s = np.mean(metrics_lgb['r2']), np.std(metrics_lgb['r2'])
     
+    rmae_m, rmae_s = np.mean(metrics_ridge['mae']), np.std(metrics_ridge['mae'])
+    rmse_m2, rmse_s2 = np.mean(metrics_ridge['mse']), np.std(metrics_ridge['mse'])
+    rrmse_m, rrmse_s = np.mean(metrics_ridge['rmse']), np.std(metrics_ridge['rmse'])
+    rr2_m, rr2_s = np.mean(metrics_ridge['r2']), np.std(metrics_ridge['r2'])
+
+    print(f"  [LightGBM]")
     print(f"  CV MAE  : {mae_m:.4f} ± {mae_s:.4f}")
     print(f"  CV MSE  : {mse_m:.4f} ± {mse_s:.4f}")
     print(f"  CV RMSE : {rmse_m:.4f} ± {rmse_s:.4f}")
-    print(f"  CV R2   : {r2_m:.4f} ± {r2_s:.4f}")
+    print(f"  CV R2   : {r2_m:.4f} ± {r2_s:.4f}\n")
+
+    print(f"  [Ridge]")
+    print(f"  CV MAE  : {rmae_m:.4f} ± {rmae_s:.4f}")
+    print(f"  CV MSE  : {rmse_m2:.4f} ± {rmse_s2:.4f}")
+    print(f"  CV RMSE : {rrmse_m:.4f} ± {rrmse_s:.4f}")
+    print(f"  CV R2   : {rr2_m:.4f} ± {rr2_s:.4f}\n")
     
     # Train full model
     final_model = lgb.LGBMRegressor(n_estimators=200, learning_rate=0.05, max_depth=6, random_state=42, n_jobs=-1, verbose=-1)
     final_model.fit(X, y)
     
     with open(f'{REPORTS_DIR}/lgd_regression_metrics.txt', 'w') as f:
+        f.write(f"LightGBM:\n")
         f.write(f"CV MAE  : {mae_m:.4f} ± {mae_s:.4f}\n")
         f.write(f"CV MSE  : {mse_m:.4f} ± {mse_s:.4f}\n")
         f.write(f"CV RMSE : {rmse_m:.4f} ± {rmse_s:.4f}\n")
-        f.write(f"CV R2   : {r2_m:.4f} ± {r2_s:.4f}\n")
+        f.write(f"CV R2   : {r2_m:.4f} ± {r2_s:.4f}\n\n")
+        f.write(f"Ridge:\n")
+        f.write(f"CV MAE  : {rmae_m:.4f} ± {rmae_s:.4f}\n")
+        f.write(f"CV MSE  : {rmse_m2:.4f} ± {rmse_s2:.4f}\n")
+        f.write(f"CV RMSE : {rrmse_m:.4f} ± {rrmse_s:.4f}\n")
+        f.write(f"CV R2   : {rr2_m:.4f} ± {rr2_s:.4f}\n")
         
     return final_model, features
 

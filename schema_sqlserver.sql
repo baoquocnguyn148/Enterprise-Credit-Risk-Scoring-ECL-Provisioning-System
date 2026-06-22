@@ -16,15 +16,12 @@ USE master;
 GO
 
 -- ── Drop & recreate database ──────────────────────────────────────────────────
-IF EXISTS (SELECT name FROM sys.databases WHERE name = 'HomeCredit')
+-- Safe default: create the database if it does not exist.
+-- For a destructive rebuild, drop HomeCredit manually after taking backups.
+IF NOT EXISTS (SELECT name FROM sys.databases WHERE name = 'HomeCredit')
 BEGIN
-    ALTER DATABASE HomeCredit SET SINGLE_USER WITH ROLLBACK IMMEDIATE;
-    DROP DATABASE HomeCredit;
+    CREATE DATABASE HomeCredit COLLATE Vietnamese_CI_AS;
 END
-GO
-
-CREATE DATABASE HomeCredit
-    COLLATE Vietnamese_CI_AS;   -- supports Vietnamese characters in future reports
 GO
 
 USE HomeCredit;

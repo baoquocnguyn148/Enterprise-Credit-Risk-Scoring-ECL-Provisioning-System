@@ -36,6 +36,10 @@ import lightgbm as lgb
 import xgboost as xgb
 from catboost import CatBoostClassifier
 from sklearn.ensemble import RandomForestClassifier
+from sklearn.linear_model import LogisticRegression
+from sklearn.preprocessing import StandardScaler
+from sklearn.impute import SimpleImputer
+from sklearn.pipeline import Pipeline
 
 from pathlib import Path
 ROOT_DIR    = Path(__file__).resolve().parent.parent
@@ -119,7 +123,12 @@ models_dict = {
     'RandomForest': RandomForestClassifier(
         n_estimators=300, max_depth=10, class_weight='balanced',
         random_state=42, n_jobs=-1
-    )
+    ),
+    'LogisticRegression': Pipeline([
+        ('imputer', SimpleImputer(strategy='median')),
+        ('scaler', StandardScaler()),
+        ('classifier', LogisticRegression(class_weight='balanced', max_iter=1000, random_state=42, n_jobs=-1))
+    ])
 }
 
 # ═══════════════════════════════════════════════════════════════
@@ -152,11 +161,14 @@ for model_name, model in models_dict.items():
             X_tr, X_vl = X.iloc[train_idx], X.iloc[val_idx]
             y_tr, y_vl = y.iloc[train_idx], y.iloc[val_idx]
             
-            # RandomForest không nhận NaN
-            if model_name == 'RandomForest':
-                X_tr = X_tr.fillna(0)
-                X_vl = X_vl.fillna(0)
-                test_df_clean = test_df[FEATURES].fillna(0)
+            # RandomForest và Logistic Regression Pipeline không nhận NaN/cần xử lý
+            if model_name in ['RandomForest', 'LogisticRegression']:
+                if model_name == 'RandomForest':
+                    X_tr = X_tr.fillna(0)
+                    X_vl = X_vl.fillna(0)
+                    test_df_clean = test_df[FEATURES].fillna(0)
+                else:
+                    test_df_clean = test_df[FEATURES]
             else:
                 test_df_clean = test_df[FEATURES]
                 
@@ -313,8 +325,12 @@ fpr_cal, tpr_cal, thresholds_cal = roc_curve(y, cal_oof_preds)
 optimal_threshold = thresholds_cal[(tpr_cal - fpr_cal).argmax()]
 
 # Lưu winner
+for i, fold_model in enumerate(best_models, start=1):
+    with open(os.path.join(MODELS_DIR, f'model_fold{i}.pkl'), 'wb') as f:
+        pickle.dump(fold_model, f)
+
 with open(os.path.join(MODELS_DIR, 'best_production_model.pkl'), 'wb') as f:
-    pickle.dump(best_models[0], f)  # Lưu fold 1 làm đại diện hoặc luân phiên
+    pickle.dump(best_models[0], f)
 with open(os.path.join(MODELS_DIR, 'isotonic_calibrator.pkl'), 'wb') as f:
     pickle.dump(calibrator, f)
 with open(os.path.join(MODELS_DIR, 'feature_list.pkl'), 'wb') as f:

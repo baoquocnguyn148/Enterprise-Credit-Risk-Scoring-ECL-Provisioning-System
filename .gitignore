@@ -16,6 +16,7 @@ __pycache__/
 .eggs/
 dist/
 build/
+catboost_info/
 
 # === Jupyter ===
 .ipynb_checkpoints/
