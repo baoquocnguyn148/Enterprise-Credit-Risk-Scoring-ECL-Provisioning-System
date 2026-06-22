@@ -39,11 +39,11 @@ def log(t):    print(f"     {t}")
 # ═══════════════════════════════════════════════════════════════
 header("STEP 1 — Load Model and Sample Data")
 
-step("Loading best fold model (fold 2 — highest AUC)...")
-# Use fold2 which tends to be the strongest
-model_path = os.path.join(MODELS_DIR, 'lgbm_fold2.pkl')
+step("Loading best production model...")
+model_path = os.path.join(MODELS_DIR, 'best_production_model.pkl')
 if not os.path.exists(model_path):
-    model_path = os.path.join(MODELS_DIR, 'lgbm_model.pkl')
+    print(f"ERROR: {model_path} not found. Run modeling.py first.")
+    sys.exit(1)
 with open(model_path, 'rb') as f:
     model = pickle.load(f)
 

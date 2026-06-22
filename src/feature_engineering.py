@@ -339,42 +339,9 @@ assert remaining_nan == 0, "Imputation failed — still has NaN!"
 
 
 # ═══════════════════════════════════════════════════════════════
-# STEP 2.9 — Feature Selection (theo Plan §2.7)
+# STEP 2.9 — Interaction Features (Cross-signal Engineering)
 # ═══════════════════════════════════════════════════════════════
-header("STEP 2.9 — Feature Selection")
-
-feature_cols = [c for c in df.columns if c not in ['SK_ID_CURR', 'TARGET', 'IS_TRAIN']]
-n_before_selection = len(feature_cols)
-
-# ── 2.9a. Remove zero-variance columns ────────────────────────
-step("Remove near-zero variance features (var < 0.01)")
-variances = df[feature_cols].var()
-zero_var = variances[variances < 0.01].index.tolist()
-df.drop(columns=zero_var, inplace=True)
-feature_cols = [c for c in feature_cols if c not in zero_var]
-log(f"  Dropped {len(zero_var)} near-zero variance features")
-if zero_var:
-    log(f"  Examples: {zero_var[:5]}")
-
-# ── 2.9b. Remove highly correlated pairs (r > 0.95) ───────────
-step("Remove highly correlated features (|r| > 0.95)")
-corr_matrix = df[feature_cols].corr().abs()
-upper = corr_matrix.where(np.triu(np.ones(corr_matrix.shape, dtype=bool), k=1))
-to_drop_corr = [col for col in upper.columns if any(upper[col] > 0.95)]
-df.drop(columns=to_drop_corr, inplace=True)
-feature_cols = [c for c in feature_cols if c not in to_drop_corr]
-log(f"  Dropped {len(to_drop_corr)} highly correlated features")
-if to_drop_corr:
-    log(f"  Examples: {to_drop_corr[:5]}")
-
-log(f"\n  Feature count: {n_before_selection} → {len(feature_cols)}")
-log(f"  Total dropped: {n_before_selection - len(feature_cols)}")
-
-
-# ═══════════════════════════════════════════════════════════════
-# STEP 2.11 — Interaction Features (Cross-signal Engineering)
-# ═══════════════════════════════════════════════════════════════
-header("STEP 2.11 — Interaction Features")
+header("STEP 2.9 — Interaction Features")
 
 # Nhóm 1: Financial stress composite
 # Người trẻ nợ nhiều khác với người già nợ nhiều — LightGBM không tự capture
@@ -411,24 +378,44 @@ if len(ext_cols) >= 2:
     df['EXT_SOURCE_PRODUCT'] = df[ext_cols].product(axis=1)
     df['EXT_SOURCE_STD']     = df[ext_cols].std(axis=1).fillna(0)
 
-# Add new features to feature_cols
-interaction_feats = [
-    'STRESS_AGE_X_CREDIT', 'STRESS_EMP_X_ANNUITY', 'STRESS_DOCS_X_CREDIT',
-    'BUREAU_QUALITY_COMPOSITE', 'CLEAN_BUREAU_HIGH_LTI',
-    'EXT_SOURCE_MEAN', 'EXT_SOURCE_MIN', 'EXT_SOURCE_PRODUCT', 'EXT_SOURCE_STD',
-]
-for f in interaction_feats:
-    if f in df.columns and f not in feature_cols:
-        feature_cols.append(f)
 
-log(f"Interaction features added: {[f for f in interaction_feats if f in df.columns]}")
-log(f"New total feature count: {len(feature_cols)}")
+# ═══════════════════════════════════════════════════════════════
+# STEP 2.10 — Feature Selection (theo Plan §2.7)
+# ═══════════════════════════════════════════════════════════════
+header("STEP 2.10 — Feature Selection")
+
+feature_cols = [c for c in df.columns if c not in ['SK_ID_CURR', 'TARGET', 'IS_TRAIN']]
+n_before_selection = len(feature_cols)
+
+# ── 2.10a. Remove zero-variance columns ────────────────────────
+step("Remove near-zero variance features (var < 0.01)")
+variances = df[feature_cols].var()
+zero_var = variances[variances < 0.01].index.tolist()
+df.drop(columns=zero_var, inplace=True)
+feature_cols = [c for c in feature_cols if c not in zero_var]
+log(f"  Dropped {len(zero_var)} near-zero variance features")
+if zero_var:
+    log(f"  Examples: {zero_var[:5]}")
+
+# ── 2.10b. Remove highly correlated pairs (r > 0.95) ───────────
+step("Remove highly correlated features (|r| > 0.95)")
+corr_matrix = df[feature_cols].corr().abs()
+upper = corr_matrix.where(np.triu(np.ones(corr_matrix.shape, dtype=bool), k=1))
+to_drop_corr = [col for col in upper.columns if any(upper[col] > 0.95)]
+df.drop(columns=to_drop_corr, inplace=True)
+feature_cols = [c for c in feature_cols if c not in to_drop_corr]
+log(f"  Dropped {len(to_drop_corr)} highly correlated features")
+if to_drop_corr:
+    log(f"  Examples: {to_drop_corr[:5]}")
+
+log(f"\n  Feature count: {n_before_selection} → {len(feature_cols)}")
+log(f"  Total dropped: {n_before_selection - len(feature_cols)}")
 
 
 # ═══════════════════════════════════════════════════════════════
-# STEP 2.10 — Compute Target Correlation & Save
+# STEP 2.11 — Compute Target Correlation & Save
 # ═══════════════════════════════════════════════════════════════
-header("STEP 2.10 — Target Correlation & Save")
+header("STEP 2.11 — Target Correlation & Save")
 
 step("Computing correlation with TARGET (on train set only)")
 train_df = df[df['IS_TRAIN'] == 1].copy()

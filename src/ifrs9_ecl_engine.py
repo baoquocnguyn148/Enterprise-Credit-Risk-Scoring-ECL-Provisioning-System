@@ -348,7 +348,8 @@ if __name__ == '__main__':
     ead = estimate_ead(df)
 
     result, summary = compute_ifrs9_ecl(df, lgd, ead)
-    lgd_sensitivity_analysis(result, lgd, ead, result['PRED_PROB'])
+    lgd_mean_series = pd.Series(lgd.mean(), index=result.index)
+    lgd_sensitivity_analysis(result, lgd_mean_series, ead, result['PRED_PROB'])
 
     # Save
     result.to_parquet(f'{DATA_DIR}/results_ifrs9.parquet', index=False)

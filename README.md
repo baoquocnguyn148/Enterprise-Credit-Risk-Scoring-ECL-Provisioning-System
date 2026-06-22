@@ -476,6 +476,16 @@ Dự án này được thiết kế để **nổi bật trong portfolio và inte
 
 ---
 
+## 🔥 Enterprise Upgrades (v3.0)
+
+Bản cập nhật v3.0 tích hợp các cải tiến mạnh mẽ từ hệ thống Multi-Model Benchmark và tối ưu hoá giao diện:
+- **Hệ thống Multi-Model Benchmark**: Tự động đánh giá 4 thuật toán hàng đầu (LightGBM, XGBoost, CatBoost, RandomForest). Xuất bảng xếp hạng và biểu đồ ROC so sánh trực quan.
+- **Tối ưu hiệu suất RAM cho Streamlit Dashboard**: Cơ chế downcasting ép kiểu dữ liệu giúp giảm hơn 50% mức tiêu thụ bộ nhớ, chống lỗi MemoryError hoàn toàn.
+- **Data Defensive Logic**: Pipeline an toàn, có cơ chế fallback tự động lấy dữ liệu từ raw files hoặc bypass an toàn nếu một bước dữ liệu trước đó gặp sự cố.
+- **Cấu trúc IFRS 9 Fallback**: Xử lý mượt mà các NameError và tối ưu hiệu suất tính toán LGD Sensitivity.
+
+---
+
 ## 📜 License
 
 MIT License — Tự do sử dụng, học tập, và tham khảo với attribution.

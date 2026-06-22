@@ -22,7 +22,10 @@ import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import os
+from pathlib import Path
 
+ROOT_DIR = Path(__file__).resolve().parent.parent
+DATA_DIR = str(ROOT_DIR / 'data')
 REPORTS_DIR = str(ROOT_DIR / 'reports')
 os.makedirs(REPORTS_DIR, exist_ok=True)
 
@@ -182,10 +185,24 @@ def lgd_sensitivity_analysis(df: pd.DataFrame, lgd_series: pd.Series,
 
 
 if __name__ == '__main__':
-from pathlib import Path
-ROOT_DIR = Path(__file__).resolve().parent.parent
-    DATA_DIR = str(ROOT_DIR / 'data')
-    df       = pd.read_parquet(f'{DATA_DIR}/results_df.parquet')
+    df = pd.read_parquet(f'{DATA_DIR}/results_df.parquet')
+
+    # Defensive Fallback Logic
+    req_cols = ['NAME_CONTRACT_TYPE', 'AMT_CREDIT', 'AMT_GOODS_PRICE']
+    missing_cols = [c for c in req_cols if c not in df.columns]
+    
+    if 'NAME_CONTRACT_TYPE' in missing_cols:
+        ohe_cols = [c for c in df.columns if c.startswith('NAME_CONTRACT_TYPE_')]
+        if len(ohe_cols) > 0:
+            missing_cols.remove('NAME_CONTRACT_TYPE')
+            
+    if missing_cols:
+        print(f"  Missing {missing_cols} in results_df, pulling from application_train_clean.parquet...")
+        try:
+            app_clean = pd.read_parquet(f'{DATA_DIR}/cleaned/application_train_clean.parquet', columns=['SK_ID_CURR'] + missing_cols)
+            df = df.merge(app_clean, on='SK_ID_CURR', how='left')
+        except Exception as e:
+            print(f"  Could not pull fallback data: {e}")
 
     lgd = estimate_lgd(df)
     ead = estimate_ead(df)
@@ -196,7 +213,7 @@ ROOT_DIR = Path(__file__).resolve().parent.parent
     print(f"  Min:    {lgd.min():.3f}")
     print(f"  Max:    {lgd.max():.3f}")
     print(f"\n EAD vs AMT_CREDIT uplift: "
-          f"{(ead/df['AMT_CREDIT'].clip(lower=1)).mean():.3f}x")
+          f"{(ead/df.get('AMT_CREDIT', pd.Series(1, index=df.index)).clip(lower=1)).mean():.3f}x")
 
     lgd_sensitivity_analysis(df, lgd, ead, df['PRED_PROB'])
 

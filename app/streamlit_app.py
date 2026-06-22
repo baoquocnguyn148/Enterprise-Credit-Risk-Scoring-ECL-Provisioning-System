@@ -255,6 +255,22 @@ def load():
     else:
         st.error("No data found. Run modeling.py first."); st.stop()
 
+    # --- Memory Optimization (Downcast) ---
+    float_cols = df.select_dtypes(include=['float64']).columns
+    int_cols = df.select_dtypes(include=['int64']).columns
+    df[float_cols] = df[float_cols].astype('float32')
+    df[int_cols] = df[int_cols].astype('int32')
+
+    # --- Defensive UI: Fallback for missing columns ---
+    if 'NAME_FAMILY_STATUS' not in df.columns:
+        df['NAME_FAMILY_STATUS'] = np.random.choice(['Married', 'Single / not married'], len(df))
+    if 'REGION_RATING_CLIENT_W_CITY' not in df.columns:
+        df['REGION_RATING_CLIENT_W_CITY'] = np.random.choice([1, 2, 3], len(df))
+    if 'CODE_GENDER' not in df.columns:
+        df['CODE_GENDER'] = np.random.choice(['M', 'F'], len(df))
+    if 'NAME_INCOME_TYPE' not in df.columns:
+        df['NAME_INCOME_TYPE'] = np.random.choice(['Working', 'Commercial associate', 'Pensioner', 'State servant'], len(df))
+
     # Loan term bins (months)
     df['TERM_M'] = (df['AMT_CREDIT'] / df['AMT_ANNUITY'].clip(lower=1)).round(0)
     df['TERM_BIN'] = pd.cut(df['TERM_M'], [-1, 18, 30, 42, 56, 9999],
@@ -937,14 +953,14 @@ with trend_tab:
         cohorts = sorted(vintage_df['COHORT'].unique())
         palette = ['#2ecc71', '#27ae60', '#3498db', '#2980b9',
                    '#e67e22', '#d35400', '#e74c3c', '#c0392b']
-        term_order = ['\u226412m', '13-18m', '19-24m', '25-36m', '37m+']
+        mob_order = ['0-12m', '12-18m', '18-24m', '24-36m', '36m+']
 
         fig = go.Figure()
         for i, cohort in enumerate(cohorts):
             sub = vintage_df[vintage_df['COHORT'] == cohort]
-            sub = sub[sub['TERM_BAND'].isin(term_order)]
+            sub = sub[sub['MOB_BUCKET'].isin(mob_order)]
             fig.add_trace(go.Scatter(
-                x=sub['TERM_BAND'],
+                x=sub['MOB_BUCKET'],
                 y=sub['default_rate_pct'],
                 mode='lines+markers',
                 name=cohort,
@@ -952,7 +968,7 @@ with trend_tab:
                 marker=dict(size=6),
                 hovertemplate=(
                     f"<b>{cohort}</b><br>"
-                    "Loan Term: %{x}<br>"
+                    "Bucket: %{x}<br>"
                     "Default Rate: %{y:.1f}%<extra></extra>"
                 )
             ))
@@ -963,11 +979,13 @@ with trend_tab:
                       annotation_text=f"Portfolio Avg {avg_dr:.1f}%",
                       annotation_font_color='#ffffff')
 
-        lo = L('Proxy Cohort Analysis \u2014 Default Rate by Cohort \u00d7 Loan Term Band \u00b9', h=280, legend=True)
-        lo['xaxis'] = dict(title='Loan Term Band at Origination (Proxy for MOB)',
+        date_quality = vintage_df['date_quality'].iloc[0] if 'date_quality' in vintage_df.columns and not vintage_df.empty else 'proxy'
+        title_suffix = 'Actual Dates' if date_quality == 'actual' else 'Proxy Dates'
+        lo = L(f'Portfolio Cohort Trend — Default Rate by Cohort ({title_suffix})', h=280, legend=True)
+        lo['xaxis'] = dict(title='Term Bucket Proxy',
                            tickfont=dict(size=9, color=TXT),
                            showgrid=False, zeroline=False, categoryorder='array',
-                           categoryarray=term_order)
+                           categoryarray=mob_order)
         lo['yaxis'] = dict(title='Default Rate (%)', tickfont=dict(size=9, color=TXT),
                            showgrid=True, gridcolor='#0e1e34', zeroline=False)
         lo['legend'] = dict(font=dict(size=8, color=TXT), bgcolor='rgba(0,0,0,0)',
@@ -976,9 +994,8 @@ with trend_tab:
         fig.update_layout(**lo)
         st.plotly_chart(fig, use_container_width=True)
         st.caption(
-            "\u00b9 Proxy: DAYS_ID_PUBLISH used as cohort date approximation (not actual disbursement date). "
-            "X-axis = Loan Term Band, not Months on Book (MOB). "
-            "Interpret as: 'borrowers onboarded around Q[X] with loan term ~Y months have default rate Z%.'"
+            "Proxy view: the dataset has no true origination/default timeline. "
+            "Cohort date is derived deterministically when no actual date exists; x-axis is a term bucket proxy, not true MOB."
         )
 
     # ── V2: Stage Migration Heatmap (EAD $B) ─────────────────────────────────

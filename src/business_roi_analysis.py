@@ -200,3 +200,34 @@ if __name__ == '__main__':
     print(f"  Net Profit:     ${best['net_profit_M']:.1f}M")
     print(f"  vs KS threshold ({0.4806:.3f}) profit: "
           f"${compute_profit_at_threshold(df, 0.4806)['net_profit_M']:.1f}M")
+
+    # ── Enrich Data cho Streamlit Dashboard ─────────────────────────
+    print("\n  Enriching data for BI Dashboard...")
+    try:
+        raw_csv_path = os.path.join(DATA_DIR, 'raw', 'application_train.csv')
+        if os.path.exists(raw_csv_path):
+            raw_df = pd.read_csv(raw_csv_path, usecols=['SK_ID_CURR', 'OCCUPATION_TYPE', 'NAME_INCOME_TYPE', 'NAME_EDUCATION_TYPE', 'NAME_FAMILY_STATUS', 'CODE_GENDER'])
+            df = df.merge(raw_df, on='SK_ID_CURR', how='left')
+            print("    [+] Joined text columns from raw CSV.")
+        else:
+            print(f"    [-] Raw CSV not found at {raw_csv_path}. Skipping text join.")
+    except Exception as e:
+        print(f"    [-] Error joining raw CSV: {e}")
+
+    # Gán nhãn Decision_Status
+    df['Decision_Status'] = np.where(df['PRED_PROB'] < best['threshold'], 'Approved', 'Rejected')
+    
+    # Gán Credit_Band
+    if 'RISK_TIER' in df.columns:
+        df['Credit_Band'] = df['RISK_TIER'].replace({
+            'Very Low': 'Excellent',
+            'Low': 'Good',
+            'Medium': 'Fair',
+            'High': 'Poor'
+        })
+    else:
+        df['Credit_Band'] = 'Unknown'
+
+    # Lưu lại
+    df.to_parquet(f'{DATA_DIR}/results_df.parquet', index=False)
+    print("  [+] Saved enriched data to results_df.parquet.")
